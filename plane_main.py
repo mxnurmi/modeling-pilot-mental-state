@@ -7,6 +7,20 @@ import copy
 
 EPSILON = 1e-3
 START_FUEL = 5
+STRESS = 0
+
+# TODO: What generates stress?
+# -> every turn wind doesn't change -> more stress
+# -> every turn fuel gets lower -> more stress
+# -> uncertainty -> more stress
+
+# TODO: What constitutes as cognitive workload?
+
+# Are stress and cognitive workload only external or internal states of the agent?
+
+# We should have a global variable STRESS which is a function of (abs(p(event) x r(event)), kun r < 0) 
+# This then affects Noise level
+# For this we'll need p for each event with negative reward
 
 # https://h2r.github.io/pomdp-py/html/_modules/pomdp_problems/tag/domain/action.html#TagAction
 class PlaneAction(pomdp_py.Action):
@@ -92,6 +106,7 @@ class TransitionModel(pomdp_py.TransitionModel):
                 return 1 - EPSILON
 
     def sample(self, state, action):
+
         if state.fuel < 1:
             return PlaneState("Linköping", True, START_FUEL) # reset
 
@@ -101,6 +116,8 @@ class TransitionModel(pomdp_py.TransitionModel):
             else:
                 return PlaneState(state.location, state.wind, state.fuel - 1) # NOTE: if we try to land wind does not change
         if action.name == ("wait-wind"):
+            #print("probs:")
+            #print(self.probability(next_state=PlaneState("Linköping", False, 5), state=state, action=action))
             windy_state = PlaneState("Linköping", True, state.fuel - 1)
             non_windy_state = PlaneState("Linköping", False, state.fuel - 1)
             return random.choices([windy_state, non_windy_state], weights=[0.7, 0.3], k=1)[0]
@@ -152,15 +169,18 @@ class ObservationModel(pomdp_py.ObservationModel):
                 return PlaneObservation(next_state.wind)
             else:
                 return PlaneObservation(not next_state.wind)
-
         else:
             return PlaneObservation(None)
 
 
 class RewardModel(pomdp_py.RewardModel):
+    def __init__(self):
+        self._max_punish = -100
+
     def _reward_func(self, state, action):
+
         if state.fuel < 1:
-            return -100
+            return self._max_punish 
         if action.name == "wait-wind": # Small punishment for waiting
             return -1
         elif action.name == "change-airport": # Should always have a punishment for changing airport
@@ -175,8 +195,13 @@ class RewardModel(pomdp_py.RewardModel):
         # deterministic
         return self._reward_func(state, action)
 
+    def max_punishment(self):
+        return self._max_punish
 
-# Hmm, this can be broken up by calling pomdp_py.POMDP directly with different parts
+    # how to return max reward for normalization?
+
+
+# Hmm, this can be split to separate functions by calling pomdp_py.POMDP directly with different parts
 class PlaneProblem(pomdp_py.POMDP):
     """
     PlaneProblem class is a wrapper
@@ -206,6 +231,26 @@ def generate_init_belief(num_particles):
 
     return pomdp_py.Particles(particles)
 
+# TODO: This is currently "wrong" and evaluates stress assuming current state. However we would
+# want to evaluate stress over the expected reward over different actions.
+# This would need evaluation over all outcomes as well? Maybe easiest way to do this would be by MCMC 
+# sampling (generate samples from posterior)
+def compute_stress(plane_problem, action):
+    prob_dict = plane_problem.agent.cur_belief.get_histogram() # get all states agent is considering
+    stress_sum = 0
+
+    for key in prob_dict:
+        state = [key][0]
+        probability = prob_dict[key]
+        corresponding_reward = RewardModel().sample(state, action, next_state=None)
+        if corresponding_reward < 0:
+            stress = probability * corresponding_reward
+        else:
+            stress = 0
+        stress_sum += stress
+    
+    return stress_sum
+
 
 def test_planner(plane_problem, planner, nsteps=5, debug_tree=False):
     """
@@ -227,9 +272,9 @@ def test_planner(plane_problem, planner, nsteps=5, debug_tree=False):
         print("Action: %s" % str(action))
         print("Reward: %s" % str(plane_problem.env.reward_model.sample(
             plane_problem.env.state, action, None)))
+
         print("\n")
 
-        
         # TODO: What is this needed for?
         env_reward = plane_problem.env.state_transition(action, execute=True)
         
@@ -238,9 +283,7 @@ def test_planner(plane_problem, planner, nsteps=5, debug_tree=False):
         plane_problem.agent.update_history(action, real_observation)
         planner.update(plane_problem.agent, action, real_observation)
         
-        
         action = planner.plan(plane_problem.agent)
-
 
         """
         if debug_tree:
@@ -321,7 +364,7 @@ def main():
     plane_problem.agent.set_belief(init_belief)
     init_state = PlaneState("Linköping", False, START_FUEL)
     #plane_problem = PlaneProblem(init_state, init_belief)
-    pomcp = pomdp_py.POMCP(max_depth=5, discount_factor=0.95,
+    pomcp = pomdp_py.POMCP(max_depth=3, discount_factor=0.95,
                            num_sims=1000, exploration_const=50,
                            rollout_policy=plane_problem.agent.policy_model,
                            show_progress=True, pbar_update_interval=500)
@@ -330,6 +373,8 @@ def main():
     # TODO: check the tree and how to interpret it 
     TreeDebugger(plane_problem.agent.tree).pp
 
+# -Why is the fuel situation uncertain if we incorrectly land?-
+# -> Related to the fact that the model does not know when the problem truly resets
 
 if __name__ == '__main__':
     main()
