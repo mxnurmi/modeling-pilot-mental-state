@@ -388,6 +388,9 @@ def main():
 if __name__ == '__main__':
     main()
 
+# TODO: The final stress model should be one where we sample from all the actions
+# and the higher there is a chance for max negative reward, the more stress the agent
+# has
 
 # ==== OLD =====
 

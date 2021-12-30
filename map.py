@@ -18,6 +18,8 @@ from shapely.ops import transform
 map2 = gpd.read_file("./alla_valdistrikt/alla_valdistrikt.shp")
 
 fig, ax = plt.subplots(figsize=(50, 50))
+
+print(map2)
 map2.plot(ax=ax)
 # %%
 map2.head()
@@ -66,7 +68,8 @@ cell_size = (xmax-xmin)/n_cells
 # create the cells in a loop
 grid_cells = []
 airport_cells = []
-for x0 in np.arange(xmin, xmax+cell_size, cell_size ):
+# TODO: We can also use this to create a separate matrix for visualizations
+for x0 in np.arange(xmin, xmax+cell_size, cell_size):
     for y0 in np.arange(ymin, ymax+cell_size, cell_size):
         # bounds
         x1 = x0-cell_size
@@ -111,3 +114,6 @@ airports.plot(ax=ax, facecolor="black", edgecolor='black')
 
 
 # %%
+# korkeus: 15 leveys: 31
+# malmö: 9,7
+# linkö: 8, 21
