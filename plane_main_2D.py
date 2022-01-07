@@ -12,12 +12,12 @@ from stress_functions import stress_function
 EPSILON = 1e-3
 START_FUEL = 35 # also max fuel
 STRESS = 0
-MALMO_LOCATION = (7, 9)  # (7, 9)
+MALMEN_LOCATION = (7, 9)  # (7, 9)
 LINKOPING_LOCATION = (21, 8)  
 SIZE = (31, 15)
 WIND_PROB = 1
 
-MALMO_LOCATION = (1,1)  # (7, 9)
+MALMEN_LOCATION = (1,1)  # (7, 9)
 LINKOPING_LOCATION = (5,5)  
 SIZE = (13,13)
 
@@ -170,7 +170,7 @@ class TransitionModel(pomdp_py.TransitionModel):
 
         if isinstance(action, LandAction):
             # TODO: FIX based on new locations
-            if (state.location == MALMO_LOCATION) or (state.location == LINKOPING_LOCATION and state.wind == False):
+            if (state.location == MALMEN_LOCATION) or (state.location == LINKOPING_LOCATION and state.wind == False):
                 return PlaneState("landed", True, state.fuel)
             else:
                 # NOTE: if we try to incorrectly land wind does not change ?
@@ -181,7 +181,7 @@ class TransitionModel(pomdp_py.TransitionModel):
 
         if isinstance(action, WaitAction):
             #windy_state = PlaneState(state.location, True, state.fuel - 1)
-            return PlaneState(state.location, wind_state, state.fuel)
+            return PlaneState(state.location, wind_state, state.fuel - 1)
             # return random.choices([windy_state, non_windy_state], weights=[0.7, 0.3], k=1)[0]
 
         if isinstance(action, MoveAction):
@@ -283,7 +283,7 @@ class RewardModel(pomdp_py.RewardModel):
         elif isinstance(action, MoveAction):
             return 0  # no punishment for moving
         elif isinstance(action, LandAction):
-            if (state.location == MALMO_LOCATION): #or (state.location == LINKOPING_LOCATION and state.wind == False):
+            if (state.location == MALMEN_LOCATION): #or (state.location == LINKOPING_LOCATION and state.wind == False):
                 return 1000
             else:
                 return -5  # punish for trying to land when not able to
@@ -350,8 +350,44 @@ def generate_init_belief(num_particles):
 # crosswind = sivutuuli
 # laskeutumista yritetään jostain korkeudesta?
 # windspeed from here: https://weatherspark.com/h/d/80053/2021/1/22/Historical-Weather-on-Friday-January-22-2021-in-Linköping-Sweden#Figures-WindSpeed
+# 10. helmikuuta 2021 turussa tuulinen päivä
 
+# from here: https://en.ilmatieteenlaitos.fi/download-observations 2020,2,10,02:00,UTC onward
 
+weather_data = [
+    (20.6,9.2),
+    (20.6,8.8),
+    (20.6,9),
+    (20.6,9.6),
+    (20.6,9.2),
+    (20.6,9.7),
+    (20.6,9.6),
+    (20.6,9.5),
+    (20.6,9.5),
+    (20.6,9.9),
+    (17.8,9.7),
+    (17.8,9.2),
+    (17.8,9.3),
+    (17.8,9.1),
+    (20.4,9.3),
+    (20.6,9.8),
+    (20.6,10),
+    (20.6,10),
+    (20.6,9.8),
+    (20.6,10),
+    (20.6,10.5),
+    (20.6,10.7),
+    (20.6,10.9),
+    (20.6,11),
+    (20.6,10.8),
+    (18.7,10.4),
+    (18.7,10.5),
+    (18.7,10.7),
+    (18.7,10.9),
+    (18.7,10.6),
+    (16,10),
+    (16,10)
+]
 
 
 def test_planner(plane_problem, planner, nsteps=5, debug_tree=False, size=None):
@@ -407,7 +443,7 @@ def test_planner(plane_problem, planner, nsteps=5, debug_tree=False, size=None):
         visualize_plane_problem(width=n,
                         height=k,
                         plane_location=true_state.location,
-                        airport_location1=MALMO_LOCATION,
+                        airport_location1=MALMEN_LOCATION,
                         airport_location2=LINKOPING_LOCATION,
                         plot=True
                         )
@@ -423,7 +459,7 @@ def test_planner(plane_problem, planner, nsteps=5, debug_tree=False, size=None):
         plane_problem.agent.update_history(action, real_observation)
         planner.update(plane_problem.agent, action, real_observation)
 
-
+        # TODO: move this inside the stress function
         # TODO: Make sure we always pick strongest belief (now pick first?)
         for belief in plane_problem.agent.cur_belief:
             belief_state = belief
@@ -431,6 +467,7 @@ def test_planner(plane_problem, planner, nsteps=5, debug_tree=False, size=None):
 
         stress_sine = stress_function("sine_wind_based", belief_state, start_fuel=START_FUEL)
         stress_normal = stress_function("normal_wind_based", belief_state, start_fuel=START_FUEL)
+        #stress_expected_reward = stress_function("expected_negative_reward", plane_problem=plane_problem)
 
         stress_states_sine.append(stress_sine)
         stress_states_normal.append(stress_normal)
@@ -461,10 +498,10 @@ def main():
     # (https://github.com/h2r/pomdp-py/blob/master/pomdp_py/framework/basics.pyx)
     # plane_problem.agent.set_belief(init_belief, prior=True)
 
-    pomcp = pomdp_py.POMCP(max_depth=10, discount_factor=0.999,  # what does the discount_factor do?
-                           num_sims=5000, exploration_const=3000,
+    pomcp = pomdp_py.POMCP(max_depth=100, discount_factor=0.999,  # what does the discount_factor do?
+                           num_sims=50000, exploration_const=3000,
                            rollout_policy=plane_problem.agent.policy_model,
-                           show_progress=False, pbar_update_interval=100)
+                           show_progress=True, pbar_update_interval=1000)
     test_planner(plane_problem, planner=pomcp, nsteps=10, size=(n, k))
 
 # -- Why is the fuel situation uncertain if we incorrectly land? --
@@ -481,7 +518,7 @@ if __name__ == '__main__':
 # Stress should come from either high uncertainty with likely negative reward or
 # high chance of negative reward
 
-# TODO: Could we fix this by adding knowldge about malmö location??
+# TODO: Could we fix this by adding knowldge about Malmen location??
 
 # ==== OLD =====
 
@@ -507,3 +544,42 @@ def compute_stress_old(plane_problem, action):
         stress_sum += stress
 
     return stress_sum
+
+
+# %%
+
+weather_data = [
+    (20.6,9.2),
+    (20.6,8.8),
+    (20.6,9),
+    (20.6,9.6),
+    (20.6,9.2),
+    (20.6,9.7),
+    (20.6,9.6),
+    (20.6,9.5),
+    (20.6,9.5),
+    (20.6,9.9),
+    (17.8,9.7),
+    (17.8,9.2),
+    (17.8,9.3),
+    (17.8,9.1),
+    (20.4,9.3),
+    (20.6,9.8),
+    (20.6,10),
+    (20.6,10),
+    (20.6,9.8),
+    (20.6,10),
+    (20.6,10.5),
+    (20.6,10.7),
+    (20.6,10.9),
+    (20.6,11),
+    (20.6,10.8),
+    (18.7,10.4),
+    (18.7,10.5),
+    (18.7,10.7),
+    (18.7,10.9),
+    (18.7,10.6),
+    (16,10),
+    (16,10)
+]
+# %%

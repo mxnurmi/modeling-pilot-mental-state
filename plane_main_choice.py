@@ -118,7 +118,7 @@ class TransitionModel(pomdp_py.TransitionModel):
             return PlaneState("Linköping", True, START_FUEL)  # reset 
 
         if action.name == "land":
-            if state.location == "Malmö" or state.wind == False:
+            if state.location == "Malmen" or state.wind == False:
                 # TODO: Change reset into non-changing state
                 return PlaneState("Linköping", True, START_FUEL)  # reset
             else:
@@ -131,7 +131,7 @@ class TransitionModel(pomdp_py.TransitionModel):
             non_windy_state = PlaneState("Linköping", False, state.fuel - 1)
             return random.choices([windy_state, non_windy_state], weights=[0.7, 0.3], k=1)[0]
         if action.name == ("change-airport"):
-            return PlaneState("Malmö", False, state.fuel - 3)
+            return PlaneState("Malmen", False, state.fuel - 3)
 
     def argmax(self, state, action, normalized=False, **kwargs):
         """Returns the most likely next state"""
@@ -195,7 +195,7 @@ class RewardModel(pomdp_py.RewardModel):
         elif action.name == "change-airport":  # Should always have a punishment for changing airport
             return -25
         elif action.name == "land":
-            if state.location == "Malmö" or state.wind == False:
+            if state.location == "Malmen" or state.wind == False:
                 return 50
             else:
                 return -10  # punish for trying to land when not able to
@@ -264,7 +264,7 @@ def normalize_value(x, min_value, max_value):
     return ((x - min_value) / (max_value - min_value))
 
 
-def stress_function(function_name, plane_state):
+def stress_function(function_name, plane_state, plane_problem=None):
 
     #wind = plane_state.wind
     # to normalize:
@@ -352,7 +352,7 @@ def test_planner(plane_problem, planner, nsteps=5, debug_tree=False):
         stress_states_sine.append(stress_sine)
         stress_states_normal.append(stress_normal)
 
-        if (((true_state.wind == False) or (true_state.location == 'Malmö')) and str(action) == 'land'):
+        if (((true_state.wind == False) or (true_state.location == 'Malmen')) and str(action) == 'land'):
             print("sine stress")
             print(stress_states_sine)
 
@@ -375,7 +375,7 @@ def main():
     # (https://github.com/h2r/pomdp-py/blob/master/pomdp_py/framework/basics.pyx)
     # plane_problem.agent.set_belief(init_belief, prior=True)
 
-    pomcp = pomdp_py.POMCP(max_depth=2, discount_factor=0.95,
+    pomcp = pomdp_py.POMCP(max_depth=6, discount_factor=0.95,
                            num_sims=500, exploration_const=50,
                            rollout_policy=plane_problem.agent.policy_model,
                            show_progress=True, pbar_update_interval=500)
