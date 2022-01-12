@@ -34,7 +34,6 @@ SIZE = (13,13)
 # This then affects Noise level
 # For this we'll need p for each event with negative reward
 
-
 # https://h2r.github.io/pomdp-py/html/_modules/pomdp_problems/tag/domain/action.html#TagAction
 class PlaneAction(pomdp_py.Action):
     def __init__(self, name):
@@ -75,8 +74,6 @@ MoveNorth = MoveAction(MoveAction.NORTH, "NORTH")
 MoveSouth = MoveAction(MoveAction.SOUTH, "SOUTH")
 
 # waiting also checks for wind
-
-
 class WaitAction(PlaneAction):
     def __init__(self):
         super().__init__("check-wind")
@@ -86,9 +83,8 @@ class LandAction(PlaneAction):
     def __init__(self):
         super().__init__("land")
 
+
 # https://h2r.github.io/pomdp-py/html/_modules/pomdp_problems/tag/domain/state.html#TagState
-
-
 class PlaneState(pomdp_py.State):
     def __init__(self, location, wind, fuel):
         self.location = location
@@ -467,7 +463,7 @@ def test_planner(plane_problem, planner, nsteps=5, debug_tree=False, size=None):
 
         stress_sine = stress_function("sine_wind_based", belief_state, start_fuel=START_FUEL)
         stress_normal = stress_function("normal_wind_based", belief_state, start_fuel=START_FUEL)
-        #stress_expected_reward = stress_function("expected_negative_reward", plane_problem=plane_problem)
+        stress_expected_reward = stress_function("expected_negative_reward", plane_problem=plane_problem)
 
         stress_states_sine.append(stress_sine)
         stress_states_normal.append(stress_normal)
@@ -499,7 +495,7 @@ def main():
     # plane_problem.agent.set_belief(init_belief, prior=True)
 
     pomcp = pomdp_py.POMCP(max_depth=100, discount_factor=0.999,  # what does the discount_factor do?
-                           num_sims=50000, exploration_const=3000,
+                           num_sims=5000, exploration_const=3000,
                            rollout_policy=plane_problem.agent.policy_model,
                            show_progress=True, pbar_update_interval=1000)
     test_planner(plane_problem, planner=pomcp, nsteps=10, size=(n, k))

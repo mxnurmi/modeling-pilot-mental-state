@@ -6,6 +6,9 @@ import random
 
 #We should estimate the wind based on previous wind state
 
+# TODO: The wind is only relevant for stress near Linköping, 
+# so we should focus on that!
+
 def normalize_value(x, min_value, max_value):
     return ((x - min_value) / (max_value - min_value))
 
@@ -41,8 +44,17 @@ def stress_function(function_name, plane_state=None, start_fuel=None, plane_prob
 
     if function_name == "expected_negative_reward":
 
-        print(plane_problem.agent.policy_model.get_all_actions())
-        
+        actions = plane_problem.agent.policy_model.get_all_actions()
+        expected = 0
+        # TODO: how to compute uncertainty between states? should we use the action being taken?
+        # maybe if after two steps we have actions which all have expected negative outcome
+        # maybe given an action we sample to depth of 3 and count what is the expected punishment?
+
+        for action in actions:
+            next_state, value = plane_problem.env.state_transition(action, execute=False) 
+            expected += value
+        print(expected)
+
         #.plane_problem.env.state_transition(action, execute=True)
         # generate expected negative reward by sampling outcomes based on possible actions
         return 0

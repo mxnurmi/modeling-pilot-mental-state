@@ -1,10 +1,16 @@
 import sys
-
+import time
 import xpc
+from datetime import datetime
 
 def monitor():
+    global last_update
+
     with xpc.XPlaneConnect() as client:
         while True:
+            
+
+            last_update = datetime.now()
             posi = client.getPOSI();
             ctrl = client.getCTRL();
 
@@ -17,7 +23,7 @@ def monitor():
             client.sendDREF(dref, values)
             value = client.getDREF(dref)
             print(value)
-            break
+            time.sleep(0.8)
 
 if __name__ == "__main__":
     monitor()

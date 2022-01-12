@@ -42,17 +42,17 @@ tes1.explore()
 print(tes1.head())
 # %%
 fig, ax = plt.subplots(figsize=(30, 40))
-tes1.plot(ax=ax)
-# %%
-
-tes1.explore()
-
+#tes1.plot(ax=ax)
 
 # %%
-sa_x = 15.670330652
+
+#tes1.explore()
+
+# %%
+sa_x = 15.670330652 #15.67
 sa_y = 58.40499838
 
-sa2_x = 15.51647
+sa2_x = 15.51647 #malmen
 sa2_y = 58.41102
 
 tes1 = tes1.to_crs({'init': 'epsg:4326'})
@@ -106,6 +106,8 @@ print(len(grid_cells)/31) # Height of grid
 # UTM: 539173.94569427 6473996.5191658
 
 # %%
+
+# JUST THE GRID
 airports = gpd.GeoDataFrame(airport_cells, columns=['geometry'])
 cell = gpd.GeoDataFrame(grid_cells, columns=['geometry'])
 
