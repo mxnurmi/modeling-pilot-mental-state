@@ -4,37 +4,31 @@ import pomdp_py
 import random
 import copy
 
+#import pickle
 from pomdp_py.utils import TreeDebugger
 
-from visual import visualize_plane_problem
-from stress_functions import stress_function
+from visualizers.visual import visualize_plane_problem
+from utils.stress_functions import stress_model
 
 EPSILON = 1e-3
-START_FUEL = 35 # also max fuel
+START_FUEL = 20  # also max fuel
 STRESS = 0
 MALMEN_LOCATION = (7, 9)  # (7, 9)
-LINKOPING_LOCATION = (21, 8)  
+LINKOPING_LOCATION = (21, 8)
 SIZE = (31, 15)
 WIND_PROB = 1
 
-MALMEN_LOCATION = (1,1)  # (7, 9)
-LINKOPING_LOCATION = (5,5)  
-SIZE = (13,13)
+MALMEN_LOCATION = (1, 1)  # (7, 9)
+LINKOPING_LOCATION = (5, 5)
+SIZE = (13, 13)
 
-# TODO: What generates stress?
-# -> every turn wind doesn't change -> more stress
-# -> every turn fuel gets lower -> more stress
-# -> uncertainty -> more stress
-
-# TODO: What constitutes as cognitive workload?
-
-# Are stress and cognitive workload only external or internal states of the agent?
-
-# We should have a global variable STRESS which is a function of (abs(p(event) x r(event)), kun r < 0)
-# This then affects Noise level
-# For this we'll need p for each event with negative reward
+# TODO:
+# - Pickle support
+# - Fix the looping agent!
 
 # https://h2r.github.io/pomdp-py/html/_modules/pomdp_problems/tag/domain/action.html#TagAction
+
+
 class PlaneAction(pomdp_py.Action):
     def __init__(self, name):
         self.name = name
@@ -74,6 +68,8 @@ MoveNorth = MoveAction(MoveAction.NORTH, "NORTH")
 MoveSouth = MoveAction(MoveAction.SOUTH, "SOUTH")
 
 # waiting also checks for wind
+
+
 class WaitAction(PlaneAction):
     def __init__(self):
         super().__init__("check-wind")
@@ -143,33 +139,26 @@ class TransitionModel(pomdp_py.TransitionModel):
         # to (state, action, next_state) which is 0.5 always as long as action is opening
         # In this transitionmodel we can just explicitly give out all of the probabilities instead
 
-        #if isinstance(action, WaitAction) or isinstance(action, MoveAction):
-        #    if next_state.wind == False:
-        #        return WIND_PROB
-        #    else:
-        #        return 1 - WIND_PROB
-        #else:
         if next_state != self.sample(state, action):
             return EPSILON
         else:
             return 1 - EPSILON
 
     def sample(self, state, action):
-        # return PlaneState("LINKÖPING", state.wind, state.fuel)
-        # TODO: make a better structure for this
+        # TODO: better structure 
         if state.location == "landed" or state.location == "crashed":
             # nothing changes
-            return PlaneState(state.location, state.wind, state.fuel)
+            # return PlaneState(state.location, state.wind, state.fuel)
+            return PlaneState(LINKOPING_LOCATION, True, START_FUEL) # reset
 
         if state.fuel < 1:
             return PlaneState("crashed", True, state.fuel)
 
         if isinstance(action, LandAction):
-            # TODO: FIX based on new locations
             if (state.location == MALMEN_LOCATION) or (state.location == LINKOPING_LOCATION and state.wind == False):
                 return PlaneState("landed", True, state.fuel)
             else:
-                # NOTE: if we try to incorrectly land wind does not change ?
+                # NOTE: if we try to incorrectly land wind does not currently change
                 return PlaneState(state.location, state.wind, state.fuel - 1)
 
         wind_state = random.choices([True, False], weights=[
@@ -275,11 +264,12 @@ class RewardModel(pomdp_py.RewardModel):
         if state.location == "crashed":
             return self._max_punish
         elif isinstance(action, WaitAction):  # Small punishment for waiting
-            return -2
+            return -1
         elif isinstance(action, MoveAction):
-            return 0  # no punishment for moving
+            return -1  # no punishment for moving
         elif isinstance(action, LandAction):
-            if (state.location == MALMEN_LOCATION): #or (state.location == LINKOPING_LOCATION and state.wind == False):
+            # or (state.location == LINKOPING_LOCATION and state.wind == False):
+            if (state.location == MALMEN_LOCATION):
                 return 1000
             else:
                 return -5  # punish for trying to land when not able to
@@ -329,64 +319,51 @@ def generate_init_belief(num_particles):
     return pomdp_py.Particles(particles)
 
 
-# TODO
-# Make wind something that comes from a distribtuion and set a landing time variable
-# if wind goes over threshold landing must be aborted
-
 # TODO: Need a way to define:
 # - Bunch of models
 # - Bunch of training scenarios that can be each input to each model
 # - Bunch of actual scenarios that can be each input to each model
 
-# 1) tuulen nopeus tulee jostakin jatkuva-arvoisesta funktiosta, kuten sinikäyrä tmv.
-# 2) jokaisessa trialissa arvotaan skenaarion parametrit, jolloin tuulen nopeus samplataan jostakin jakaumasta, ja tuon jakauman observoitu hajonta on stressi;
-# 3) odotettu negatiivinen reward on stressitaso.. tässä vain ideoita
 
-# knots = 38 (dry or wet) knots = 25 (snow) knots = 20 (3mm water) knots = 15 (ice)
-# crosswind = sivutuuli
-# laskeutumista yritetään jostain korkeudesta?
-# windspeed from here: https://weatherspark.com/h/d/80053/2021/1/22/Historical-Weather-on-Friday-January-22-2021-in-Linköping-Sweden#Figures-WindSpeed
-# 10. helmikuuta 2021 turussa tuulinen päivä
+class PlaneScenario():
+    """
+    Define the plane scenarios
 
-# from here: https://en.ilmatieteenlaitos.fi/download-observations 2020,2,10,02:00,UTC onward
+    We have X options (that can ahppen concurrently):
+    - Wind changes randomly near closest airport to make it unfavorable, but is favorable at second
+    - 
 
-weather_data = [
-    (20.6,9.2),
-    (20.6,8.8),
-    (20.6,9),
-    (20.6,9.6),
-    (20.6,9.2),
-    (20.6,9.7),
-    (20.6,9.6),
-    (20.6,9.5),
-    (20.6,9.5),
-    (20.6,9.9),
-    (17.8,9.7),
-    (17.8,9.2),
-    (17.8,9.3),
-    (17.8,9.1),
-    (20.4,9.3),
-    (20.6,9.8),
-    (20.6,10),
-    (20.6,10),
-    (20.6,9.8),
-    (20.6,10),
-    (20.6,10.5),
-    (20.6,10.7),
-    (20.6,10.9),
-    (20.6,11),
-    (20.6,10.8),
-    (18.7,10.4),
-    (18.7,10.5),
-    (18.7,10.7),
-    (18.7,10.9),
-    (18.7,10.6),
-    (16,10),
-    (16,10)
-]
+    Parameters should probably be something like 
+    crosswind at airport1 and crosswind at airport2?
+
+    For some of these we need to calculate the square that is half
+    Way to the destination
+    """
+
+    # Wind attributes:
+    # Wind direction: wind_direction_degt[0] (north being 0)
+    # Wind altitude: wind_altitude_msl_m[0]
+    # Wind speed: wind_speed_kt[0]
+
+    # Fuel visualizer?:
+    # fuel_pressure_psi ?
+    # rel_g_fuel ?
+    # rel_fp_ind_0 ?
+
+    # dump_fuel -> maybe a switch that dumps the fuel
+
+    def __init__(self):
+        wind_attributes = (0, 0, 0)  # dir, alt, speed
+        fuel_dump = False  # will fuel be dumped mid flight
+        turning_wind = False  # will wind turn mid flight
+        refuse_landing = False  # the destination airport will refuse initial landing
+        hidden_fuel = False  # fuel meter gets frozen
+
+# wind should linearly transition to next average. Possibly we could have some normal sampling from that linear function as well
+# gusts last max 20second and should only happen with maybe 1/8 or 1/10 of a chance
 
 
-def test_planner(plane_problem, planner, nsteps=5, debug_tree=False, size=None):
+def test_planner(plane_problem, planner, nsteps=50, debug_tree=False, size=None, plot=False):
     """
     Runs the action-feedback loop of Plane problem POMDP
 
@@ -396,6 +373,9 @@ def test_planner(plane_problem, planner, nsteps=5, debug_tree=False, size=None):
         nsteps (int): Maximum number of steps to run this loop.
     """
 
+    # ----Scenario task----
+    # TODO: We should import the scenario into this class!
+
     total_reward = 0
     stress_states_sine = []
     stress_states_normal = []
@@ -404,12 +384,14 @@ def test_planner(plane_problem, planner, nsteps=5, debug_tree=False, size=None):
     true_location = LINKOPING_LOCATION
     i = 0
 
-    while (true_location != "landed") and (true_location != "crashed"):
+    # (true_location != "landed") and (true_location != "crashed"):
+    while i < nsteps:
         true_state = copy.deepcopy(plane_problem.env.state)
         true_location = true_state.location
 
         action = planner.plan(plane_problem.agent)
-        env_reward = plane_problem.env.state_transition(action, execute=True) #TODO: use this for sampling
+        env_reward = plane_problem.env.state_transition(
+            action, execute=True)  # TODO: use this for sampling
         total_reward += env_reward
 
         print("==== Step %d ====" % (i+1))
@@ -425,8 +407,7 @@ def test_planner(plane_problem, planner, nsteps=5, debug_tree=False, size=None):
             print("__best_reward__: %d" % planner.last_best_reward)
         print("\n")
 
-
-        n, k = size # TODO: size gets none by default, fix or do error handling
+        n, k = size  # TODO: size gets none by default, fix or do error handling
         txt_action = str(action)
         txt_reward = str(total_reward)
 
@@ -437,12 +418,12 @@ def test_planner(plane_problem, planner, nsteps=5, debug_tree=False, size=None):
 
         # TODO: visualized action is now one step behind?
         visualize_plane_problem(width=n,
-                        height=k,
-                        plane_location=true_state.location,
-                        airport_location1=MALMEN_LOCATION,
-                        airport_location2=LINKOPING_LOCATION,
-                        plot=True
-                        )
+                                height=k,
+                                plane_location=true_state.location,
+                                airport_location1=MALMEN_LOCATION,
+                                airport_location2=LINKOPING_LOCATION,
+                                plot=plot
+                                )
 
         if debug_tree == True:
             dd = TreeDebugger(plane_problem.agent.tree)
@@ -461,15 +442,28 @@ def test_planner(plane_problem, planner, nsteps=5, debug_tree=False, size=None):
             belief_state = belief
             break
 
-        stress_sine = stress_function("sine_wind_based", belief_state, start_fuel=START_FUEL)
-        stress_normal = stress_function("normal_wind_based", belief_state, start_fuel=START_FUEL)
-        stress_expected_reward = stress_function("expected_negative_reward", plane_problem=plane_problem)
+        stress_sine = stress_model(
+            "sine_wind_based", belief_state, start_fuel=START_FUEL)
+        stress_normal = stress_model(
+            "normal_wind_based", belief_state, start_fuel=START_FUEL)
+        #stress_expected_reward = stress_function("expected_negative_reward", plane_problem=plane_problem)
 
         stress_states_sine.append(stress_sine)
         stress_states_normal.append(stress_normal)
 
         i += 1
-    
+
+    som = plane_problem.agent
+    # with open(f'test.pickle', 'wb') as file:
+    #pickle.dump(som, file)
+
+    # load it
+    # with open(f'test.pickle', 'rb') as file2:
+    #s1_new = pickle.load(file2)
+
+    # print("pickle")
+    # print(s1_new)
+
     print("\nSine stress")
     print(stress_states_sine)
 
@@ -492,13 +486,23 @@ def main():
 
     # prior = True seems to reset the belief state completely
     # (https://github.com/h2r/pomdp-py/blob/master/pomdp_py/framework/basics.pyx)
-    # plane_problem.agent.set_belief(init_belief, prior=True)
+    plane_problem.agent.set_belief(init_belief, prior=True)
 
-    pomcp = pomdp_py.POMCP(max_depth=100, discount_factor=0.999,  # what does the discount_factor do?
-                           num_sims=5000, exploration_const=3000,
+    pomcp = pomdp_py.POMCP(max_depth=30, discount_factor=0.9999,  # what does the discount_factor do?
+                           num_sims=1000, exploration_const=10000,
                            rollout_policy=plane_problem.agent.policy_model,
                            show_progress=True, pbar_update_interval=1000)
-    test_planner(plane_problem, planner=pomcp, nsteps=10, size=(n, k))
+
+    #po_rollout = pomdp_py.PORollout()
+
+    # pouct = pomdp_py.POUCT(max_depth=10, discount_factor=0.999,  # what does the discount_factor do?
+    #                       num_sims=1000, exploration_const=1000,
+    #                       rollout_policy=plane_problem.agent.policy_model,
+    #                       show_progress=True, pbar_update_interval=1000)
+
+    test_planner(plane_problem, planner=pomcp,
+                 nsteps=50, size=(n, k), plot=True)
+    # TreeDebugger(plane_problem.agent.tree).pp
 
 # -- Why is the fuel situation uncertain if we incorrectly land? --
 # -> Related to the fact that the model does not know when the problem truly resets
@@ -545,37 +549,37 @@ def compute_stress_old(plane_problem, action):
 # %%
 
 weather_data = [
-    (20.6,9.2),
-    (20.6,8.8),
-    (20.6,9),
-    (20.6,9.6),
-    (20.6,9.2),
-    (20.6,9.7),
-    (20.6,9.6),
-    (20.6,9.5),
-    (20.6,9.5),
-    (20.6,9.9),
-    (17.8,9.7),
-    (17.8,9.2),
-    (17.8,9.3),
-    (17.8,9.1),
-    (20.4,9.3),
-    (20.6,9.8),
-    (20.6,10),
-    (20.6,10),
-    (20.6,9.8),
-    (20.6,10),
-    (20.6,10.5),
-    (20.6,10.7),
-    (20.6,10.9),
-    (20.6,11),
-    (20.6,10.8),
-    (18.7,10.4),
-    (18.7,10.5),
-    (18.7,10.7),
-    (18.7,10.9),
-    (18.7,10.6),
-    (16,10),
-    (16,10)
+    (20.6, 9.2),
+    (20.6, 8.8),
+    (20.6, 9),
+    (20.6, 9.6),
+    (20.6, 9.2),
+    (20.6, 9.7),
+    (20.6, 9.6),
+    (20.6, 9.5),
+    (20.6, 9.5),
+    (20.6, 9.9),
+    (17.8, 9.7),
+    (17.8, 9.2),
+    (17.8, 9.3),
+    (17.8, 9.1),
+    (20.4, 9.3),
+    (20.6, 9.8),
+    (20.6, 10),
+    (20.6, 10),
+    (20.6, 9.8),
+    (20.6, 10),
+    (20.6, 10.5),
+    (20.6, 10.7),
+    (20.6, 10.9),
+    (20.6, 11),
+    (20.6, 10.8),
+    (18.7, 10.4),
+    (18.7, 10.5),
+    (18.7, 10.7),
+    (18.7, 10.9),
+    (18.7, 10.6),
+    (16, 10),
+    (16, 10)
 ]
 # %%

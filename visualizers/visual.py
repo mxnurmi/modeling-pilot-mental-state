@@ -51,7 +51,7 @@ def visualize_plane_problem(width, height, plane_location, airport_location1, ai
 
 
     # use this: https://pretagteam.com/question/how-to-add-legend-to-imshow-in-matplotlib
-    plt.show()
+    plt.pause(0.001) # TODO: This is poor way to animate as it captures focus
 
 # %%
 if __name__ == "__main__":

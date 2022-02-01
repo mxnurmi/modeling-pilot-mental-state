@@ -9,15 +9,27 @@ import random
 # TODO: The wind is only relevant for stress near Linköping, 
 # so we should focus on that!
 
+# TODO: What generates stress?
+# -> every turn wind doesn't change -> more stress
+# -> every turn fuel gets lower -> more stress
+# -> uncertainty -> more stress
+
 def normalize_value(x, min_value, max_value):
     return ((x - min_value) / (max_value - min_value))
 
-def stress_function(function_name, plane_state=None, start_fuel=None, plane_problem=None):
-
-    #wind = plane_state.wind
+def stress_model(function_name, plane_state=None, start_fuel=None, current_wind=None, plane_problem=None):
+    # TODO: Having these flexible none types is bad or they should be then checked by each stress function or something
+    # wind = plane_state.wind
     # to normalize:
     # https://stats.stackexchange.com/questions/70801/how-to-normalize-data-to-0-1-range
-    
+
+    if function_name == "purely_wind_based":
+
+        # TODO: We need some kind of function that balances between 0 and 1 
+        # where after 25 wind, we start a slow rice and after 45 will have stress of
+        # 1
+
+        return current_wind
 
     if function_name == "sine_wind_based":
         # this should be fixed so that when wind is high -> expect lower
@@ -53,7 +65,7 @@ def stress_function(function_name, plane_state=None, start_fuel=None, plane_prob
         for action in actions:
             next_state, value = plane_problem.env.state_transition(action, execute=False) 
             expected += value
-        print(expected)
+        #print(expected)
 
         #.plane_problem.env.state_transition(action, execute=True)
         # generate expected negative reward by sampling outcomes based on possible actions
