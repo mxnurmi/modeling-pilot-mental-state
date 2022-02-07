@@ -7,7 +7,11 @@ import copy
 #import pickle
 from pomdp_py.utils import TreeDebugger
 
-from visualizers.visual import visualize_plane_problem
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+from matplotlib.animation import PillowWriter
+
+from visualizers.visual import visualize_plane_problem, get_coordinates
 from utils.stress_functions import stress_model
 
 EPSILON = 1e-3
@@ -19,8 +23,8 @@ SIZE = (31, 15)
 WIND_PROB = 1
 
 MALMEN_LOCATION = (1, 1)  # (7, 9)
-LINKOPING_LOCATION = (5, 5)
-SIZE = (13, 13)
+LINKOPING_LOCATION = (5,5)
+SIZE = (8,8)
 
 # TODO:
 # - Pickle support
@@ -208,13 +212,13 @@ class PolicyModel(pomdp_py.RolloutPolicy):
             if state.location != "crashed" and state.location != "landed":
                 plane_x, plane_y = state.location
                 if plane_x == self._k - 1:
-                    motions.remove(MoveWest)
+                    motions.remove(MoveEast)
                 if plane_y == 0:
-                    motions.remove(MoveNorth)
-                if plane_y == self._n - 1:
                     motions.remove(MoveSouth)
+                if plane_y == self._n - 1:
+                    motions.remove(MoveNorth)
                 if plane_x == 0:
-                    motions.remove(MoveEast)  # TODO: correct?
+                    motions.remove(MoveWest)  # TODO: correct?
 
             #print(motions | self._other_actions)
             return motions | self._other_actions
@@ -363,7 +367,7 @@ class PlaneScenario():
 # gusts last max 20second and should only happen with maybe 1/8 or 1/10 of a chance
 
 
-def test_planner(plane_problem, planner, nsteps=50, debug_tree=False, size=None, plot=False):
+def runner_no_a(plane_problem, planner, nsteps=20, debug_tree=False, size=None, plot=False):
     """
     Runs the action-feedback loop of Plane problem POMDP
 
@@ -372,19 +376,14 @@ def test_planner(plane_problem, planner, nsteps=50, debug_tree=False, size=None,
         planner (Planner): a planner
         nsteps (int): Maximum number of steps to run this loop.
     """
-
     # ----Scenario task----
-    # TODO: We should import the scenario into this class!
+    # TODO: We should import the scenarios!
 
     total_reward = 0
     stress_states_sine = []
     stress_states_normal = []
-
-    # TODO: Change to either "landed" or "crashed" to be the terminal state
-    true_location = LINKOPING_LOCATION
     i = 0
 
-    # (true_location != "landed") and (true_location != "crashed"):
     while i < nsteps:
         true_state = copy.deepcopy(plane_problem.env.state)
         true_location = true_state.location
@@ -406,24 +405,6 @@ def test_planner(plane_problem, planner, nsteps=50, debug_tree=False, size=None,
         if isinstance(planner, pomdp_py.PORollout):
             print("__best_reward__: %d" % planner.last_best_reward)
         print("\n")
-
-        n, k = size  # TODO: size gets none by default, fix or do error handling
-        txt_action = str(action)
-        txt_reward = str(total_reward)
-
-        text = """
-                Action: %s \n
-                Reward (cumulative): %s \n
-               """ % (txt_action, txt_reward)
-
-        # TODO: visualized action is now one step behind?
-        visualize_plane_problem(width=n,
-                                height=k,
-                                plane_location=true_state.location,
-                                airport_location1=MALMEN_LOCATION,
-                                airport_location2=LINKOPING_LOCATION,
-                                plot=plot
-                                )
 
         if debug_tree == True:
             dd = TreeDebugger(plane_problem.agent.tree)
@@ -447,7 +428,6 @@ def test_planner(plane_problem, planner, nsteps=50, debug_tree=False, size=None,
         stress_normal = stress_model(
             "normal_wind_based", belief_state, start_fuel=START_FUEL)
         #stress_expected_reward = stress_function("expected_negative_reward", plane_problem=plane_problem)
-
         stress_states_sine.append(stress_sine)
         stress_states_normal.append(stress_normal)
 
@@ -474,8 +454,93 @@ def test_planner(plane_problem, planner, nsteps=50, debug_tree=False, size=None,
     print("=== DONE ===")
 
 
+
+def runner_a(plane_problem, planner, nsteps=20, size=None):
+    """
+    Runs the action-feedback loop of Plane problem POMDP
+
+    Args:
+        plane_problem (PlaneProblem): an instance of the plane problem.
+        planner (Planner): a planner
+        nsteps (int): Maximum number of steps to run this loop.
+    """
+
+    #total_reward = 0
+
+    fig = plt.figure(figsize=(8,8))
+    ax = fig.add_subplot(111)
+    plot_text = ax.text(0, -1.2, '', fontsize=20, 
+        bbox = dict(facecolor = 'grey', alpha = 0.5))
+
+    n, k = size  # TODO: size gets none by default, fix or do error handling
+    width=n
+    height=k
+    true_state = copy.deepcopy(plane_problem.env.state)
+    plane_location=true_state.location
+    airport_location1=MALMEN_LOCATION
+    airport_location2=LINKOPING_LOCATION
+    coordinates = get_coordinates(width, height, plane_location, airport_location1, airport_location2)
+
+    im = plt.imshow(coordinates, origin='lower', cmap='gray')
+
+    def animate_func(frame):
+        print("frame: " + str(frame)) # TODO: getting two zero frames why??
+        if frame == nsteps-1:
+            plt.close(fig) # TODO: FIX!
+            #return 0
+        else:
+            true_state = copy.deepcopy(plane_problem.env.state)
+            #true_location = true_state.location
+
+            action = planner.plan(plane_problem.agent)
+            env_reward = plane_problem.env.state_transition(
+                action, execute=True)  # TODO: use this for sampling
+            #total_reward += env_reward
+
+            real_observation = plane_problem.env.provide_observation(
+                plane_problem.agent.observation_model, action)
+            plane_problem.agent.update_history(action, real_observation)
+            planner.update(plane_problem.agent, action, real_observation)
+            #print(frame)
+
+
+            plane_location=true_state.location
+            coordinates = get_coordinates(width, height, plane_location, airport_location1, airport_location2)
+            im.set_array(coordinates)
+
+            plot_text.set_text("Action:" + str(action) 
+                + "\n" + " Reward:" + str(env_reward)
+                + "\n" + " State:" + str(true_state)
+            )
+
+            print("==== Step %d ====" % (frame+1))
+            print("True state: %s" % true_state)
+            print("Belief: %s" % str(plane_problem.agent.cur_belief))
+            print("Action: %s" % str(action))
+            print("Reward: %s" % str(env_reward))
+            if isinstance(planner, pomdp_py.POUCT):
+                print("__num_sims__: %d" % planner.last_num_sims)
+                print("__plan_time__: %.5f" % planner.last_planning_time)
+            if isinstance(planner, pomdp_py.PORollout):
+                print("__best_reward__: %d" % planner.last_best_reward)
+            print("\n")
+
+            # TODO: make animation window larger
+   
+
+    anim = animation.FuncAnimation(
+                            fig, 
+                            animate_func, 
+                            frames = nsteps,
+                            interval = 10, # in ms
+                            )
+    #anim.save("TLI.gif", dpi=300, writer=PillowWriter(fps=1))
+    plt.show()
+
+
+
 # TODO: Split the main function so that it can run any of the given functions given an input and model
-def main():
+def main(plot):
     init_true_state = PlaneState(LINKOPING_LOCATION, True, START_FUEL)
     init_belief = generate_init_belief(50)
 
@@ -486,12 +551,6 @@ def main():
 
     # prior = True seems to reset the belief state completely
     # (https://github.com/h2r/pomdp-py/blob/master/pomdp_py/framework/basics.pyx)
-    plane_problem.agent.set_belief(init_belief, prior=True)
-
-    pomcp = pomdp_py.POMCP(max_depth=30, discount_factor=0.9999,  # what does the discount_factor do?
-                           num_sims=1000, exploration_const=10000,
-                           rollout_policy=plane_problem.agent.policy_model,
-                           show_progress=True, pbar_update_interval=1000)
 
     #po_rollout = pomdp_py.PORollout()
 
@@ -500,8 +559,20 @@ def main():
     #                       rollout_policy=plane_problem.agent.policy_model,
     #                       show_progress=True, pbar_update_interval=1000)
 
-    test_planner(plane_problem, planner=pomcp,
-                 nsteps=50, size=(n, k), plot=True)
+
+    plane_problem.agent.set_belief(init_belief, prior=True)
+
+    pomcp = pomdp_py.POMCP(max_depth=5, discount_factor=0.85,  # what does the discount_factor do?
+                           planning_time=1, num_sims=-1, exploration_const=100,
+                           rollout_policy=plane_problem.agent.policy_model,
+                           show_progress=False, pbar_update_interval=1000)
+
+    if plot==False:
+        runner_no_a(plane_problem, planner=pomcp,
+                    nsteps=30, size=(n, k))
+    else:
+        runner_a(plane_problem, planner=pomcp,
+                nsteps=5, size=(n, k))         
     # TreeDebugger(plane_problem.agent.tree).pp
 
 # -- Why is the fuel situation uncertain if we incorrectly land? --
@@ -509,7 +580,7 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    main(plot=True)
 
 # TODO: The final stress model should be one where we sample from all the actions
 # and the higher there is a chance for max negative reward, the more stress the agent
