@@ -453,7 +453,7 @@ def runner_no_a(plane_problem, planner, nsteps=20, debug_tree=False, size=None, 
     print("\n")
     print("=== DONE ===")
 
-
+total_reward = 0
 
 def runner_a(plane_problem, planner, nsteps=20, size=None):
     """
@@ -465,12 +465,12 @@ def runner_a(plane_problem, planner, nsteps=20, size=None):
         nsteps (int): Maximum number of steps to run this loop.
     """
 
-    #total_reward = 0
-
     fig = plt.figure(figsize=(8,8))
     ax = fig.add_subplot(111)
-    plot_text = ax.text(0, -1.2, '', fontsize=20, 
-        bbox = dict(facecolor = 'grey', alpha = 0.5))
+    fig.set_dpi(120)
+    fig.set_size_inches(9, 13, forward=True)
+    plot_text = ax.text(-0.8, -3, '', fontsize=15)
+        #bbox = dict(facecolor = 'grey', alpha = 0.5))
 
     n, k = size  # TODO: size gets none by default, fix or do error handling
     width=n
@@ -482,12 +482,21 @@ def runner_a(plane_problem, planner, nsteps=20, size=None):
     coordinates = get_coordinates(width, height, plane_location, airport_location1, airport_location2)
 
     im = plt.imshow(coordinates, origin='lower', cmap='gray')
+    
+    def init_anim():
+        coordinates = get_coordinates(width, height, plane_location, airport_location1, airport_location2)
+        im.set_array(coordinates)
 
     def animate_func(frame):
-        print("frame: " + str(frame)) # TODO: getting two zero frames why??
+        global total_reward # hacky way to update total_reward
+        
+        print("frame: " + str(frame)) 
         if frame == nsteps-1:
-            plt.close(fig) # TODO: FIX!
-            #return 0
+            true_state = copy.deepcopy(plane_problem.env.state)
+            plot_text.set_text("SIMULATION COMPLETE" 
+            + "\nFinal state:" + str(true_state)
+            + "\nTotal reward:" + str(total_reward)
+            )
         else:
             true_state = copy.deepcopy(plane_problem.env.state)
             #true_location = true_state.location
@@ -495,29 +504,32 @@ def runner_a(plane_problem, planner, nsteps=20, size=None):
             action = planner.plan(plane_problem.agent)
             env_reward = plane_problem.env.state_transition(
                 action, execute=True)  # TODO: use this for sampling
-            #total_reward += env_reward
+
+            cum_rewd = total_reward + env_reward
+            total_reward = cum_rewd
 
             real_observation = plane_problem.env.provide_observation(
                 plane_problem.agent.observation_model, action)
             plane_problem.agent.update_history(action, real_observation)
             planner.update(plane_problem.agent, action, real_observation)
-            #print(frame)
-
 
             plane_location=true_state.location
             coordinates = get_coordinates(width, height, plane_location, airport_location1, airport_location2)
             im.set_array(coordinates)
 
             plot_text.set_text("Action:" + str(action) 
-                + "\n" + " Reward:" + str(env_reward)
-                + "\n" + " State:" + str(true_state)
+                + "\n" + "Reward:" + str(env_reward)
+                + "\n" + "Total reward: " + str(total_reward)
+                + "\n" + "State:" + str(true_state)
             )
+            
 
             print("==== Step %d ====" % (frame+1))
             print("True state: %s" % true_state)
             print("Belief: %s" % str(plane_problem.agent.cur_belief))
             print("Action: %s" % str(action))
             print("Reward: %s" % str(env_reward))
+            print("Total reward: " + str(total_reward))
             if isinstance(planner, pomdp_py.POUCT):
                 print("__num_sims__: %d" % planner.last_num_sims)
                 print("__plan_time__: %.5f" % planner.last_planning_time)
@@ -526,13 +538,16 @@ def runner_a(plane_problem, planner, nsteps=20, size=None):
             print("\n")
 
             # TODO: make animation window larger
-   
+            return [im]
 
+   
     anim = animation.FuncAnimation(
                             fig, 
-                            animate_func, 
+                            animate_func,
+                            init_func=init_anim,
                             frames = nsteps,
-                            interval = 10, # in ms
+                            interval = 510, # in ms
+                            repeat=False
                             )
     #anim.save("TLI.gif", dpi=300, writer=PillowWriter(fps=1))
     plt.show()
@@ -563,7 +578,7 @@ def main(plot):
     plane_problem.agent.set_belief(init_belief, prior=True)
 
     pomcp = pomdp_py.POMCP(max_depth=5, discount_factor=0.85,  # what does the discount_factor do?
-                           planning_time=1, num_sims=-1, exploration_const=100,
+                           planning_time=0.6, num_sims=-1, exploration_const=100,
                            rollout_policy=plane_problem.agent.policy_model,
                            show_progress=False, pbar_update_interval=1000)
 
@@ -572,7 +587,7 @@ def main(plot):
                     nsteps=30, size=(n, k))
     else:
         runner_a(plane_problem, planner=pomcp,
-                nsteps=5, size=(n, k))         
+                nsteps=40, size=(n, k))         
     # TreeDebugger(plane_problem.agent.tree).pp
 
 # -- Why is the fuel situation uncertain if we incorrectly land? --
