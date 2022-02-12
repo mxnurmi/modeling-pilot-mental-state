@@ -2,3 +2,4 @@
 extra/
 *.pickle
 *.gif
+__pycache__/

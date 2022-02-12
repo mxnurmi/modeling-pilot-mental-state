@@ -1,7 +1,6 @@
 # %%
 
 import pomdp_py
-import random
 import copy
 
 #import pickle
@@ -11,303 +10,25 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from matplotlib.animation import PillowWriter
 
-from visualizers.visual import visualize_plane_problem, get_coordinates
+from visualizers.visual import get_coordinates
 from utils.stress_functions import stress_model
 
-EPSILON = 1e-3
-START_FUEL = 20  # also max fuel
-STRESS = 0
-MALMEN_LOCATION = (7, 9)  # (7, 9)
-LINKOPING_LOCATION = (21, 8)
-SIZE = (31, 15)
-WIND_PROB = 1
+from pomdp.models import *
+from pomdp.problem import PlaneProblem
 
-MALMEN_LOCATION = (1, 1)  # (7, 9)
-LINKOPING_LOCATION = (5,5)
-SIZE = (8,8)
+from config import LINKOPING_LOCATION, MALMEN_LOCATION, START_FUEL, SIZE
 
-# TODO:
-# - Pickle support
-# - Fix the looping agent!
+# - Pickle support?
 
-# https://h2r.github.io/pomdp-py/html/_modules/pomdp_problems/tag/domain/action.html#TagAction
+# TODO: Need a way to define:
+# - Bunch of models
+# - Bunch of training scenarios that can be each input to each model
+# - Bunch of actual scenarios that can be each input to each model
 
-
-class PlaneAction(pomdp_py.Action):
-    def __init__(self, name):
-        self.name = name
-
-    def __hash__(self):
-        return hash(self.name)
-
-    def __eq__(self, other):
-        if isinstance(other, PlaneAction):
-            return self.name == other.name
-        return False
-
-    def __str__(self):
-        return self.name
-
-    def __repr__(self):
-        return "PlaneAction(%s)" % self.name
-
-
-class MoveAction(PlaneAction):
-    EAST = (1, 0)  # x is horizontal; x+ is right. y is vertical; y+ is up.
-    WEST = (-1, 0)
-    NORTH = (0, 1)  # are these correct? -> changed from original
-    SOUTH = (0, -1)  # are these correct? -> changed from original
-
-    def __init__(self, motion, name):
-        if motion not in {MoveAction.EAST, MoveAction.WEST,
-                          MoveAction.NORTH, MoveAction.SOUTH}:
-            raise ValueError("Invalid move motion %s" % motion)
-        self.motion = motion
-        super().__init__("move-%s" % str(name))
-
-
-MoveEast = MoveAction(MoveAction.EAST, "EAST")
-MoveWest = MoveAction(MoveAction.WEST, "WEST")
-MoveNorth = MoveAction(MoveAction.NORTH, "NORTH")
-MoveSouth = MoveAction(MoveAction.SOUTH, "SOUTH")
-
-# waiting also checks for wind
-
-
-class WaitAction(PlaneAction):
-    def __init__(self):
-        super().__init__("check-wind")
-
-
-class LandAction(PlaneAction):
-    def __init__(self):
-        super().__init__("land")
-
-
-# https://h2r.github.io/pomdp-py/html/_modules/pomdp_problems/tag/domain/state.html#TagState
-class PlaneState(pomdp_py.State):
-    def __init__(self, location, wind, fuel):
-        self.location = location
-        self.wind = wind
-        self.fuel = fuel
-
-    def __hash__(self):
-        return hash((self.location, self.wind, self.fuel))
-
-    def __eq__(self, other):
-        if isinstance(other, PlaneState):
-            # checks if the other state has identical name to this
-            return self.location == other.location\
-                and self.wind == other.wind\
-                and self.fuel == other.fuel
-        return False
-
-    def __str__(self):
-        return 'State(%s| %s, %s)' % (str(self.location),
-                                      str(self.wind),
-                                      str(self.fuel)
-                                      )
-
-    def __repr__(self):
-        return str(self)
-
-
-class PlaneObservation(pomdp_py.Observation):
-    def __init__(self, wind):
-        self.wind = wind
-
-    def __hash__(self):
-        return hash(self.wind)
-
-    def __eq__(self, other):
-        if isinstance(other, PlaneObservation):
-            return self.wind == other.wind
-        return False
-
-    def __str__(self):
-        return str(self.wind)
-
-    def __repr__(self):
-        return str(self)
-
-
-class TransitionModel(pomdp_py.TransitionModel):
-
-    def __init__(self, n, k):
-        self._n = n
-        self._k = k
-
-    def probability(self, next_state, state, action):
-        # TODO: we should have transition between differing wind states
-        # In the tiger example there are always two states and opening a door will corrspond
-        # to (state, action, next_state) which is 0.5 always as long as action is opening
-        # In this transitionmodel we can just explicitly give out all of the probabilities instead
-
-        if next_state != self.sample(state, action):
-            return EPSILON
-        else:
-            return 1 - EPSILON
-
-    def sample(self, state, action):
-        # TODO: better structure 
-        if state.location == "landed" or state.location == "crashed":
-            # nothing changes
-            # return PlaneState(state.location, state.wind, state.fuel)
-            return PlaneState(LINKOPING_LOCATION, True, START_FUEL) # reset
-
-        if state.fuel < 1:
-            return PlaneState("crashed", True, state.fuel)
-
-        if isinstance(action, LandAction):
-            if (state.location == MALMEN_LOCATION) or (state.location == LINKOPING_LOCATION and state.wind == False):
-                return PlaneState("landed", True, state.fuel)
-            else:
-                # NOTE: if we try to incorrectly land wind does not currently change
-                return PlaneState(state.location, state.wind, state.fuel - 1)
-
-        wind_state = random.choices([True, False], weights=[
-                                    WIND_PROB, 1-WIND_PROB], k=1)[0]
-
-        if isinstance(action, WaitAction):
-            #windy_state = PlaneState(state.location, True, state.fuel - 1)
-            return PlaneState(state.location, wind_state, state.fuel - 1)
-            # return random.choices([windy_state, non_windy_state], weights=[0.7, 0.3], k=1)[0]
-
-        if isinstance(action, MoveAction):
-            # TODO: We should handle actions that go beyond the task domain with min + max
-            #new_location = (state.location[0] + action.motion[0], state.location[1] + action.motion[1])
-
-            new_location = (max(0, min(state.location[0] + action.motion[0], self._n - 1)),
-                            max(0, min(state.location[1] + action.motion[1], self._k - 1)))
-
-            return PlaneState(new_location, wind_state, state.fuel - 1)
-
-        # backup. TODO: Better solution
-        return PlaneState(state.location, state.wind, state.fuel)
-
-    def argmax(self, state, action, normalized=False, **kwargs):
-        """Returns the most likely next state"""
-        return self.sample(state, action)
-
-
-class PolicyModel(pomdp_py.RolloutPolicy):
-    def __init__(self, n, k):
-        # old: {"wait-wind", "change-airport", "land"}}
-        self._move_actions = {MoveEast, MoveWest, MoveNorth, MoveSouth}
-        self._other_actions = {WaitAction(), LandAction()}
-        self._all_actions = self._move_actions | self._other_actions
-        self._n = n
-        self._k = k
-
-    def sample(self, state, **kwargs):
-        return random.sample(self.get_all_actions(), 1)[0]
-
-    def get_all_actions(self, **kwargs):
-        state = kwargs.get("state", None)
-        if state is None:
-            return self._all_actions
-        else:
-            motions = set(self._move_actions)
-
-            if state.location != "crashed" and state.location != "landed":
-                plane_x, plane_y = state.location
-                if plane_x == self._k - 1:
-                    motions.remove(MoveEast)
-                if plane_y == 0:
-                    motions.remove(MoveSouth)
-                if plane_y == self._n - 1:
-                    motions.remove(MoveNorth)
-                if plane_x == 0:
-                    motions.remove(MoveWest)  # TODO: correct?
-
-            #print(motions | self._other_actions)
-            return motions | self._other_actions
-
-    def probability(self, action, state, normalized=False, **kwargs):
-        raise NotImplementedError
-
-    def argmax(self, state, normalized=False, **kwargs):
-        """Returns the most likely reward"""
-        raise NotImplementedError
-
-
-class ObservationModel(pomdp_py.ObservationModel):
-    def __init__(self, noise=0):
-        self.noise = noise
-
-    def probability(self, observation, next_state, action):
-        if isinstance(action, WaitAction) and (next_state.location != "landed") and (next_state.location != "crashed"):
-            if observation.wind == next_state.wind:
-                return 1.0 - self.noise  # correct wind
-            else:
-                return self.noise  # incorrect wind
-        else:
-            if observation.wind is None:
-                return 1.0 - EPSILON  # expected to receive no observation
-            else:
-                return EPSILON
-
-    def sample(self, next_state, action):
-        if isinstance(action, WaitAction) and (next_state.location != "landed") and (next_state.location != "crashed"):
-            thresh = 1.0 - self.noise
-
-            if random.uniform(0, 1) < thresh:
-                return PlaneObservation(next_state.wind)
-            else:
-                return PlaneObservation(not next_state.wind)
-        else:
-            return PlaneObservation(None)
-
-
-class RewardModel(pomdp_py.RewardModel):
-    def __init__(self):
-        self._max_punish = -10000
-
-    # TODO: make sure we reward if landed is next state
-    def _reward_func(self, state, action):
-        if state.location == "crashed":
-            return self._max_punish
-        elif isinstance(action, WaitAction):  # Small punishment for waiting
-            return -1
-        elif isinstance(action, MoveAction):
-            return -1  # no punishment for moving
-        elif isinstance(action, LandAction):
-            # or (state.location == LINKOPING_LOCATION and state.wind == False):
-            if (state.location == MALMEN_LOCATION):
-                return 1000
-            else:
-                return -5  # punish for trying to land when not able to
-        return 0
-
-    def sample(self, state, action, next_state):
-        # deterministic
-        return self._reward_func(state, action)
-
-    def max_punishment(self):
-        return self._max_punish
-
-    # how to return max reward for normalization?
-
-
-# Hmm, this can be split to separate functions by calling pomdp_py.POMDP directly with different parts
-# TODO: Update so that we create the problem environment here
-class PlaneProblem(pomdp_py.POMDP):
-    """
-    PlaneProblem class is a wrapper
-    """
-
-    def __init__(self, n, k, init_true_state, init_belief):
-        """init_belief is a Distribution."""
-
-        agent = pomdp_py.Agent(init_belief,
-                               PolicyModel(n, k),
-                               TransitionModel(n, k),
-                               ObservationModel(),
-                               RewardModel())
-        env = pomdp_py.Environment(init_true_state,  # these as well
-                                   TransitionModel(n, k),
-                                   RewardModel())
-        super().__init__(agent, env, name="PlaneProblem")
+# NOTE:
+# We could approximate stress by keeping counts on how often the agent falls and if a given state
+# lead to the agent falling. The higher the chance that it did, the more stressed agent is.
+# However, this would approximate the threat to agent but how do we quantify uncertainty
 
 
 def generate_random_state():
@@ -323,17 +44,13 @@ def generate_init_belief(num_particles):
     return pomdp_py.Particles(particles)
 
 
-# TODO: Need a way to define:
-# - Bunch of models
-# - Bunch of training scenarios that can be each input to each model
-# - Bunch of actual scenarios that can be each input to each model
-
+# TODO: Make this into something that edits the config file instead
 
 class PlaneScenario():
     """
     Define the plane scenarios
 
-    We have X options (that can ahppen concurrently):
+    We have X options (that can happen concurrently):
     - Wind changes randomly near closest airport to make it unfavorable, but is favorable at second
     - 
 
@@ -367,6 +84,24 @@ class PlaneScenario():
 # gusts last max 20second and should only happen with maybe 1/8 or 1/10 of a chance
 
 
+def print_status(frame, planner, plane_problem, action, env_reward, output=True):
+
+    true_state = copy.deepcopy(plane_problem.env.state)
+
+    print("==== Step %d ====" % (frame+1))
+    print("True state: %s" % true_state)
+    print("Belief: %s" % str(plane_problem.agent.cur_belief))
+    print("Action: %s" % str(action))
+    print("Reward: %s" % str(env_reward))
+    print("Total reward: " + str(total_reward))
+    if isinstance(planner, pomdp_py.POUCT):
+        print("__num_sims__: %d" % planner.last_num_sims)
+        print("__plan_time__: %.5f" % planner.last_planning_time)
+    if isinstance(planner, pomdp_py.PORollout):
+        print("__best_reward__: %d" % planner.last_best_reward)
+    print("\n")
+
+
 def runner_no_a(plane_problem, planner, nsteps=20, debug_tree=False, size=None, plot=False):
     """
     Runs the action-feedback loop of Plane problem POMDP
@@ -393,18 +128,7 @@ def runner_no_a(plane_problem, planner, nsteps=20, debug_tree=False, size=None, 
             action, execute=True)  # TODO: use this for sampling
         total_reward += env_reward
 
-        print("==== Step %d ====" % (i+1))
-        print("True state: %s" % true_state)
-        print("Belief: %s" % str(plane_problem.agent.cur_belief))
-        print("Action: %s" % str(action))
-        print("Reward: %s" % str(env_reward))
-        print("Reward (Cumulative): %s" % str(total_reward))
-        if isinstance(planner, pomdp_py.POUCT):
-            print("__num_sims__: %d" % planner.last_num_sims)
-            print("__plan_time__: %.5f" % planner.last_planning_time)
-        if isinstance(planner, pomdp_py.PORollout):
-            print("__best_reward__: %d" % planner.last_best_reward)
-        print("\n")
+        print_status(i, planner, plane_problem, action, env_reward)
 
         if debug_tree == True:
             dd = TreeDebugger(plane_problem.agent.tree)
@@ -453,11 +177,47 @@ def runner_no_a(plane_problem, planner, nsteps=20, debug_tree=False, size=None, 
     print("\n")
     print("=== DONE ===")
 
+
+def init_figure(coordinates, true_state):
+    fig = plt.figure(figsize=(20, 10))
+    ax1 = fig.add_subplot(121)
+    ax2 = fig.add_subplot(122)
+    fig.set_dpi(120)
+    fig.set_size_inches(13, 8, forward=True)
+    # bbox = dict(facecolor = 'grey', alpha = 0.5))
+    plot_text = ax2.text(-0.8, -3.2, '', fontsize=15, weight="bold")
+    im = ax2.imshow(coordinates, origin='lower', cmap='gray')
+    ax2.set_title(f"Step 0", fontsize=20)
+    plot_text.set_text("Action: -"
+                       + "\n" + "Reward: -"
+                       + "\n" + "Total reward: 0"
+                       + "\n" + "State:" + str(true_state)
+                       )
+    ax1.set_title(f"Stress", fontsize=20)
+
+    return fig, im, plot_text, ax1, ax2
+
+
+def pomdp_step(plane_problem, planner):
+    true_state = copy.deepcopy(plane_problem.env.state)
+    action = planner.plan(plane_problem.agent)
+    env_reward = plane_problem.env.state_transition(
+        action, execute=True)  # TODO: use this for sampling
+    real_observation = plane_problem.env.provide_observation(
+        plane_problem.agent.observation_model, action)
+    plane_problem.agent.update_history(action, real_observation)
+    planner.update(plane_problem.agent, action, real_observation)
+    plane_location = true_state.location
+
+    return action, true_state, plane_location, env_reward
+
+
 total_reward = 0
 
-def runner_a(plane_problem, planner, nsteps=20, size=None):
+
+def runner_a(plane_problem, planner, nsteps=20, size=None, save_animation=False, scenario_parameters=None):
     """
-    Runs the action-feedback loop of Plane problem POMDP
+    Animates and runs the action-feedback loop of Plane problem POMDP
 
     Args:
         plane_problem (PlaneProblem): an instance of the plane problem.
@@ -465,97 +225,90 @@ def runner_a(plane_problem, planner, nsteps=20, size=None):
         nsteps (int): Maximum number of steps to run this loop.
     """
 
-    fig = plt.figure(figsize=(8,8))
-    ax = fig.add_subplot(111)
-    fig.set_dpi(120)
-    fig.set_size_inches(9, 13, forward=True)
-    plot_text = ax.text(-0.8, -3, '', fontsize=15)
-        #bbox = dict(facecolor = 'grey', alpha = 0.5))
-
     n, k = size  # TODO: size gets none by default, fix or do error handling
-    width=n
-    height=k
+    width = n
+    height = k
     true_state = copy.deepcopy(plane_problem.env.state)
-    plane_location=true_state.location
-    airport_location1=MALMEN_LOCATION
-    airport_location2=LINKOPING_LOCATION
-    coordinates = get_coordinates(width, height, plane_location, airport_location1, airport_location2)
+    plane_location = true_state.location
+    airport_location1 = MALMEN_LOCATION
+    airport_location2 = LINKOPING_LOCATION
 
-    im = plt.imshow(coordinates, origin='lower', cmap='gray')
-    
+    coordinates = get_coordinates(
+        width, height, plane_location, airport_location1, airport_location2)
+    fig, im, plot_text, ax1, ax2 = init_figure(coordinates, true_state)
+
     def init_anim():
-        coordinates = get_coordinates(width, height, plane_location, airport_location1, airport_location2)
+        coordinates = get_coordinates(
+            width, height, plane_location, airport_location1, airport_location2)
         im.set_array(coordinates)
+        return im
+
+    stress_data = []
+    frame_data = []
 
     def animate_func(frame):
-        global total_reward # hacky way to update total_reward
-        
-        print("frame: " + str(frame)) 
+        global total_reward  # hacky way to update total_reward
+
         if frame == nsteps-1:
             true_state = copy.deepcopy(plane_problem.env.state)
-            plot_text.set_text("SIMULATION COMPLETE" 
-            + "\nFinal state:" + str(true_state)
-            + "\nTotal reward:" + str(total_reward)
-            )
-        else:
-            true_state = copy.deepcopy(plane_problem.env.state)
-            #true_location = true_state.location
+            plot_text.set_text("SIMULATION COMPLETE"
+                               + "\nFinal state:" + str(true_state)
+                               + "\nTotal reward:" + str(total_reward)
+                               )
 
-            action = planner.plan(plane_problem.agent)
-            env_reward = plane_problem.env.state_transition(
-                action, execute=True)  # TODO: use this for sampling
+        else:
+            action, true_state, plane_location, env_reward = pomdp_step(
+                plane_problem, planner)
+
+            coordinates = get_coordinates(
+                width, height, plane_location, airport_location1, airport_location2)
+            im.set_array(coordinates)
 
             cum_rewd = total_reward + env_reward
             total_reward = cum_rewd
 
-            real_observation = plane_problem.env.provide_observation(
-                plane_problem.agent.observation_model, action)
-            plane_problem.agent.update_history(action, real_observation)
-            planner.update(plane_problem.agent, action, real_observation)
+            plot_text.set_text("Action: " + str(action)
+                               + "\n" + "Reward: " + str(env_reward)
+                               + "\n" + "Total reward: " + str(total_reward)
+                               + "\n" + "State: " + str(true_state)
+                               )
 
-            plane_location=true_state.location
-            coordinates = get_coordinates(width, height, plane_location, airport_location1, airport_location2)
-            im.set_array(coordinates)
+            ax2.set_title(f"Step {frame+1}", fontsize=20)
 
-            plot_text.set_text("Action:" + str(action) 
-                + "\n" + "Reward:" + str(env_reward)
-                + "\n" + "Total reward: " + str(total_reward)
-                + "\n" + "State:" + str(true_state)
-            )
-            
+            print_status(frame, planner, plane_problem, action, env_reward)
 
-            print("==== Step %d ====" % (frame+1))
-            print("True state: %s" % true_state)
-            print("Belief: %s" % str(plane_problem.agent.cur_belief))
-            print("Action: %s" % str(action))
-            print("Reward: %s" % str(env_reward))
-            print("Total reward: " + str(total_reward))
-            if isinstance(planner, pomdp_py.POUCT):
-                print("__num_sims__: %d" % planner.last_num_sims)
-                print("__plan_time__: %.5f" % planner.last_planning_time)
-            if isinstance(planner, pomdp_py.PORollout):
-                print("__best_reward__: %d" % planner.last_best_reward)
-            print("\n")
+            # TODO: Change colormap upon crash?
 
-            # TODO: make animation window larger
-            return [im]
+            for belief in plane_problem.agent.cur_belief:
+                belief_state = belief
+                break
 
-   
+            stress_normal = stress_model(
+                "normal_wind_based", belief_state, start_fuel=START_FUEL)
+            stress_data.append(stress_normal[0])
+            frame_data.append(frame)
+
+            ax1.plot(frame_data, stress_data, color="r", lw=4)
+
+            return im
+
     anim = animation.FuncAnimation(
-                            fig, 
-                            animate_func,
-                            init_func=init_anim,
-                            frames = nsteps,
-                            interval = 510, # in ms
-                            repeat=False
-                            )
-    #anim.save("TLI.gif", dpi=300, writer=PillowWriter(fps=1))
-    plt.show()
+        fig,
+        animate_func,
+        init_func=init_anim,
+        frames=nsteps,
+        interval=510,  # in ms
+        repeat=False
+    )
+    if save_animation:
+        anim.save("animation.gif", dpi=300, writer=PillowWriter(fps=2))
+    else:
+        plt.show()
 
 
-
-# TODO: Split the main function so that it can run any of the given functions given an input and model
 def main(plot):
+
+    # TODO: Init scenario here
     init_true_state = PlaneState(LINKOPING_LOCATION, True, START_FUEL)
     init_belief = generate_init_belief(50)
 
@@ -564,17 +317,6 @@ def main(plot):
 
     plane_problem = PlaneProblem(n, k, init_true_state, init_belief)
 
-    # prior = True seems to reset the belief state completely
-    # (https://github.com/h2r/pomdp-py/blob/master/pomdp_py/framework/basics.pyx)
-
-    #po_rollout = pomdp_py.PORollout()
-
-    # pouct = pomdp_py.POUCT(max_depth=10, discount_factor=0.999,  # what does the discount_factor do?
-    #                       num_sims=1000, exploration_const=1000,
-    #                       rollout_policy=plane_problem.agent.policy_model,
-    #                       show_progress=True, pbar_update_interval=1000)
-
-
     plane_problem.agent.set_belief(init_belief, prior=True)
 
     pomcp = pomdp_py.POMCP(max_depth=5, discount_factor=0.85,  # what does the discount_factor do?
@@ -582,90 +324,25 @@ def main(plot):
                            rollout_policy=plane_problem.agent.policy_model,
                            show_progress=False, pbar_update_interval=1000)
 
-    if plot==False:
+    if plot == False:
         runner_no_a(plane_problem, planner=pomcp,
                     nsteps=30, size=(n, k))
     else:
         runner_a(plane_problem, planner=pomcp,
-                nsteps=40, size=(n, k))         
-    # TreeDebugger(plane_problem.agent.tree).pp
-
-# -- Why is the fuel situation uncertain if we incorrectly land? --
-# -> Related to the fact that the model does not know when the problem truly resets
+                 nsteps=40, size=(n, k), save_animation=True)
 
 
 if __name__ == '__main__':
     main(plot=True)
 
-# TODO: The final stress model should be one where we sample from all the actions
-# and the higher there is a chance for max negative reward, the more stress the agent
-# has
-
 # Stress should come from either high uncertainty with likely negative reward or
 # high chance of negative reward
 
-# TODO: Could we fix this by adding knowldge about Malmen location??
+#### POUCT MODEL #####
 
-# ==== OLD =====
+    #po_rollout = pomdp_py.PORollout()
 
-# TODO: This is currently "wrong" and evaluates stress assuming current state. However we would
-# want to evaluate stress over the expected reward over different actions.
-# This would need evaluation over all outcomes as well? Maybe easiest way to do this would be by MCMC
-# sampling (generate samples from posterior)
-
-
-def compute_stress_old(plane_problem, action):
-    # get all states agent is considering
-    prob_dict = plane_problem.agent.cur_belief.get_histogram()
-    stress_sum = 0
-
-    for key in prob_dict:
-        state = [key][0]
-        probability = prob_dict[key]
-        corresponding_reward = RewardModel().sample(state, action, next_state=None)
-        if corresponding_reward < 0:
-            stress = probability * corresponding_reward
-        else:
-            stress = 0
-        stress_sum += stress
-
-    return stress_sum
-
-
-# %%
-
-weather_data = [
-    (20.6, 9.2),
-    (20.6, 8.8),
-    (20.6, 9),
-    (20.6, 9.6),
-    (20.6, 9.2),
-    (20.6, 9.7),
-    (20.6, 9.6),
-    (20.6, 9.5),
-    (20.6, 9.5),
-    (20.6, 9.9),
-    (17.8, 9.7),
-    (17.8, 9.2),
-    (17.8, 9.3),
-    (17.8, 9.1),
-    (20.4, 9.3),
-    (20.6, 9.8),
-    (20.6, 10),
-    (20.6, 10),
-    (20.6, 9.8),
-    (20.6, 10),
-    (20.6, 10.5),
-    (20.6, 10.7),
-    (20.6, 10.9),
-    (20.6, 11),
-    (20.6, 10.8),
-    (18.7, 10.4),
-    (18.7, 10.5),
-    (18.7, 10.7),
-    (18.7, 10.9),
-    (18.7, 10.6),
-    (16, 10),
-    (16, 10)
-]
-# %%
+    # pouct = pomdp_py.POUCT(max_depth=10, discount_factor=0.999,  # what does the discount_factor do?
+    #                       num_sims=1000, exploration_const=1000,
+    #                       rollout_policy=plane_problem.agent.policy_model,
+    #                       show_progress=True, pbar_update_interval=1000)

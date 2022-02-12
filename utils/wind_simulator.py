@@ -10,7 +10,6 @@
 # 2) jokaisessa trialissa arvotaan skenaarion parametrit, jolloin tuulen nopeus samplataan jostakin jakaumasta, ja tuon jakauman observoitu hajonta on stressi;
 # 3) odotettu negatiivinen reward on stressitaso.. tässä vain ideoita
 
-
 # knots = 38 (dry or wet) knots = 25 (snow) knots = 20 (3mm water) knots = 15 (ice)
 # crosswind = sivutuuli
 # laskeutumista yritetään jostain korkeudesta?
