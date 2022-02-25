@@ -16,7 +16,7 @@ currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentfram
 parentdir = os.path.dirname(currentdir)
 sys.path.insert(0, parentdir)
 
-from config import EPSILON, LINKOPING_LOCATION, MALMEN_LOCATION, START_FUEL, WIND_PROB
+import config
 
 class TransitionModel(pomdp_py.TransitionModel):
 
@@ -31,29 +31,29 @@ class TransitionModel(pomdp_py.TransitionModel):
         # In this transitionmodel we can just explicitly give out all of the probabilities instead
 
         if next_state != self.sample(state, action):
-            return EPSILON
+            return config.EPSILON
         else:
-            return 1 - EPSILON
+            return 1 - config.EPSILON
 
     def sample(self, state, action):
         # TODO: better structure
         if state.location == "landed" or state.location == "crashed":
             # nothing changes
             # return PlaneState(state.location, state.wind, state.fuel)
-            return PlaneState(LINKOPING_LOCATION, True, START_FUEL)  # reset
+            return PlaneState(config.LINKOPING_LOCATION, True, config.START_FUEL)  # reset
 
         if state.fuel < 1:
             return PlaneState("crashed", True, state.fuel)
 
         if isinstance(action, LandAction):
-            if (state.location == MALMEN_LOCATION) or (state.location == LINKOPING_LOCATION and state.wind == False):
+            if (state.location == config.MALMEN_LOCATION) or (state.location == config.LINKOPING_LOCATION and state.wind == False):
                 return PlaneState("landed", True, state.fuel)
             else:
                 # NOTE: if we try to incorrectly land wind does not currently change
                 return PlaneState(state.location, state.wind, state.fuel - 1)
 
         wind_state = random.choices([True, False], weights=[
-                                    WIND_PROB, 1-WIND_PROB], k=1)[0]
+                                    config.WIND_PROB, 1-config.WIND_PROB], k=1)[0]
 
         if isinstance(action, WaitAction):
             #windy_state = PlaneState(state.location, True, state.fuel - 1)
@@ -130,9 +130,9 @@ class ObservationModel(pomdp_py.ObservationModel):
                 return self.noise  # incorrect wind
         else:
             if observation.wind is None:
-                return 1.0 - EPSILON  # expected to receive no observation
+                return 1.0 - config.EPSILON  # expected to receive no observation
             else:
-                return EPSILON
+                return config.EPSILON
 
     def sample(self, next_state, action):
         if isinstance(action, WaitAction) and (next_state.location != "landed") and (next_state.location != "crashed"):
@@ -160,7 +160,7 @@ class RewardModel(pomdp_py.RewardModel):
             return -1  # no punishment for moving
         elif isinstance(action, LandAction):
             # or (state.location == LINKOPING_LOCATION and state.wind == False):
-            if (state.location == MALMEN_LOCATION):
+            if (state.location == config.MALMEN_LOCATION):
                 return 1000
             else:
                 return -5  # punish for trying to land when not able to

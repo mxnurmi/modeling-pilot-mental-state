@@ -23,7 +23,7 @@ from multiprocessing import Process, Value
 # %%
 
 def minimap(plane_coordinates_x, plane_coordinates_y):
-    full_map = gpd.read_file("../visualizers/alla_valdistrikt/alla_valdistrikt.shp")
+    full_map = gpd.read_file("./visualizers/alla_valdistrikt/alla_valdistrikt.shp")
 
     locations = ["Kärna", "S:t Lars", "Domkyrko \d* \(",
                 "Berga \d \(", "Slaka", "Ryd \d", "Skäggetorp", "Landeryd 1",

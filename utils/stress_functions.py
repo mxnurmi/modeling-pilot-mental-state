@@ -17,6 +17,7 @@ import random
 def normalize_value(x, min_value, max_value):
     return ((x - min_value) / (max_value - min_value))
 
+
 def stress_model(function_name, plane_state=None, start_fuel=None, current_wind=None, plane_problem=None):
     # TODO: Having these flexible none types is bad or they should be then checked by each stress function or something
     # wind = plane_state.wind
@@ -66,6 +67,12 @@ def stress_model(function_name, plane_state=None, start_fuel=None, current_wind=
             next_state, value = plane_problem.env.state_transition(action, execute=False) 
             expected += value
         #print(expected)
+
+        # wind limits control and amount of fuel increases control
+        # how to add uncertainty?
+        # lack of control and uncertainty could be by having it so
+        # that the goals state is "out of reach". This would be
+        # lack of control as agent is unable to directly get to goal
 
         #.plane_problem.env.state_transition(action, execute=True)
         # generate expected negative reward by sampling outcomes based on possible actions
