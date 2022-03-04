@@ -2,9 +2,7 @@
 
 import pomdp_py
 import copy
-import random
-
-from math import dist
+import math
 
 from scipy.stats import entropy
 
@@ -16,7 +14,7 @@ import matplotlib.animation as animation
 from matplotlib.animation import PillowWriter
 
 from visualizers.visual import get_coordinates
-from utils.stress_functions import stress_model
+#from utils.stress_functions import stress_model
 
 from pomdp.models import *
 from pomdp.problem import PlaneProblem
@@ -150,13 +148,16 @@ def runner_no_a(plane_problem, planner, nsteps=20, debug_tree=False, size=None, 
             belief_state = belief
             break
 
-        stress_sine = stress_model(
-            "sine_wind_based", belief_state, start_fuel=config.START_FUEL)
-        stress_normal = stress_model(
-            "normal_wind_based", belief_state, start_fuel=config.START_FUEL)
+        
+        #stress_sine = stress_model(
+        #    "sine_wind_based", belief_state, start_fuel=config.START_FUEL)
+        #stress_normal = stress_model(
+        #    "normal_wind_based", belief_state, start_fuel=config.START_FUEL)
         #stress_expected_reward = stress_function("expected_negative_reward", plane_problem=plane_problem)
-        stress_states_sine.append(stress_sine)
-        stress_states_normal.append(stress_normal)
+        #stress_states_sine.append(stress_sine)
+        #stress_states_normal.append(stress_normal)
+        # TODO: FIX stress models FOR THIS
+        raise NotImplementedError
 
         i += 1
 
@@ -170,12 +171,6 @@ def runner_no_a(plane_problem, planner, nsteps=20, debug_tree=False, size=None, 
 
     # print("pickle")
     # print(s1_new)
-
-    print("\nSine stress")
-    print(stress_states_sine)
-
-    print("\nNormal stress")
-    print(stress_states_normal)
 
     print("\n")
     print("=== DONE ===")
@@ -217,6 +212,18 @@ def pomdp_step(plane_problem, planner):
 
 total_reward = 0
 
+def normalized_entropy(probs):
+    len_data = len(probs)
+    base = 2.
+    if len_data <= 1:
+        return 0
+
+    ent = 0
+    for p in probs:
+        if p > 0.:
+            ent -= (p * math.log(p, base)) / math.log(len_data, base)
+
+    return ent
 
 def compute_stress(agent):
     # Annoying to use treedebbuger, should have direct access NOTE: maybe implement later
@@ -248,16 +255,6 @@ def compute_stress(agent):
     # Nodes could reflect uncertainty (amount of options) when combined with Entropy
     # Value could reflect controllability (lack of control is negative, having control positive)
 
-    # We should pick the optimal belief like this and not with the loop:
-    print(agent.cur_belief.mpe())
-
-    # so this is wrong:
-    for belief in agent.cur_belief:
-        belief_state = belief
-        break
-
-    # TODO: TEST THAT ABOVE LOOP IS INDEED SAME AS WITH THE ONE FROM PRINT
-
     # get probabilities for each state
     state_prob_dict = agent.cur_belief.get_histogram()
     all_state_probs = []
@@ -265,15 +262,30 @@ def compute_stress(agent):
         state = state_prob_dict[key]
         all_state_probs.append(state)
 
-    # TODO: figure out what entropy means here: watch that video again:
-    surprise = entropy(all_state_probs, base=2)
+    shannon_entropy = entropy(all_state_probs, base=2)
+    norm_entropy = normalized_entropy(all_state_probs) # entropy between 0 and 1
+    # TODO: test norm_entropy!!
+    # -> Higher entropy/suprise means that we dont know which event is likely to happen -> leads to stress
+    #print("NORM ENTROPY:")
+    #print(norm_entropy)
+    #print("SHANNON ENTROPY")
+    #print(shannon_entropy)
+    #print("\n")
 
+    # TODO: # these should be normalized:
     complexity = dd.nn
     expected_value = dd.c.value
 
+    # TODO: Can we somehow measure when a change to an uncertain state happens? E.g. fuel dump has 10% chance but when it happens its unlikely so we should have a pump in stress
+    # On the other hand, the effeect should be negative for stress to increase? E.g. wind changing benefits the pilot so should not stress?
+
+    # Stress: Stress is created by acting normally in extraordinary situations
+
+    print("agent main belief")
     print(agent.cur_belief.mpe())
 
     # TODO: compute stress using surprise, complexity, expected value here
+    # TODO: Also add other variables?
 
     stress = 0
     return stress
@@ -343,12 +355,13 @@ def runner_a(plane_problem, planner, nsteps=20, size=None, save_animation=False,
 
             # TODO: Change colormap upon plane crash?
 
-            compute_stress(plane_problem.agent)
-            # stress_normal = stress_model(
-            # "normal_wind_based", belief_state, start_fuel=config.START_FUEL)
-            # stress_data.append(stress_normal[0])
+            stress = compute_stress(plane_problem.agent)
+            #stress_normal = stress_model(
+            #"normal_wind_based", belief_state, start_fuel=config.START_FUEL)
+            stress_data.append(stress)
 
             frame_data.append(frame)
+            # TODO: multiple stress function plots?
             ax1.plot(frame_data, stress_data, color="r", lw=4)
             return im
 
@@ -369,8 +382,7 @@ def runner_a(plane_problem, planner, nsteps=20, size=None, save_animation=False,
 def main(plot, steps=15, save_animation=False):
 
     # TODO: Init scenario here
-
-    config.init_scenario(wind=1)  # this should be called in config!!
+    config.init_scenario(wind=0.90, fuel=0.92)  # this should be called in config!!
 
     init_true_state = PlaneState(
         config.LINKOPING_LOCATION, True, config.START_FUEL)
@@ -411,4 +423,34 @@ if __name__ == '__main__':
     #                       rollout_policy=plane_problem.agent.policy_model,
     #                       show_progress=True, pbar_update_interval=1000)
 
+exit()
+
+# %%
+from scipy.stats import entropy
+import math
+
+def normalized_entropy(probs):
+    len_data = len(probs)
+    base = 2.
+    if len_data <= 1:
+        return 0
+
+    #counts = Counter()
+
+    #for d in data:
+        #counts[d] += 1
+
+    ent = 0
+
+    #probs = [float(c) / len(data) for c in counts.values()]
+    for p in probs:
+        if p > 0.:
+            ent -= (p * math.log(p, base))#/math.log(len_data, base)
+
+    return ent
+
+data = [0.5, 0.5]
+print(entropy(data, base=2))
+
+print(normalized_entropy(data))
 # %%

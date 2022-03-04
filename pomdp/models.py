@@ -45,32 +45,36 @@ class TransitionModel(pomdp_py.TransitionModel):
         if state.fuel < 1:
             return PlaneState("crashed", True, state.fuel)
 
+
+        # TODO: Wind should be estimated from previous wind
+        wind_state = random.choices([True, False], weights=[
+                                    config.WIND_PROB, 1-config.WIND_PROB], k=1)[0]
+
+        # TODO: Should fuel dump amount be determined by config?s?
+        fuel_state = random.choices([state.fuel - 1, state.fuel - 5], weights=[
+                                    config.FUEL_PROB, 1-config.FUEL_PROB], k=1)[0]
+
         if isinstance(action, LandAction):
             if (state.location == config.MALMEN_LOCATION) or (state.location == config.LINKOPING_LOCATION and state.wind == False):
                 return PlaneState("landed", True, state.fuel)
             else:
-                # NOTE: if we try to incorrectly land wind does not currently change
-                return PlaneState(state.location, state.wind, state.fuel - 1)
-
-        wind_state = random.choices([True, False], weights=[
-                                    config.WIND_PROB, 1-config.WIND_PROB], k=1)[0]
+                return PlaneState(state.location, wind_state, state.fuel - 2)
 
         if isinstance(action, WaitAction):
             #windy_state = PlaneState(state.location, True, state.fuel - 1)
-            return PlaneState(state.location, wind_state, state.fuel - 1)
+            return PlaneState(state.location, wind_state, fuel_state)
             # return random.choices([windy_state, non_windy_state], weights=[0.7, 0.3], k=1)[0]
 
         if isinstance(action, MoveAction):
-            # TODO: We should handle actions that go beyond the task domain with min + max
-            #new_location = (state.location[0] + action.motion[0], state.location[1] + action.motion[1])
+            # We handle actions that go beyond the task domain with min + max
 
             new_location = (max(0, min(state.location[0] + action.motion[0], self._n - 1)),
                             max(0, min(state.location[1] + action.motion[1], self._k - 1)))
 
-            return PlaneState(new_location, wind_state, state.fuel - 1)
+            return PlaneState(new_location, wind_state, fuel_state)
 
-        # backup. TODO: Better solution
-        return PlaneState(state.location, state.wind, state.fuel)
+        # backup. TODO: Better solution?
+        return PlaneState(state.location, state.wind, fuel_state)
 
     def argmax(self, state, action, normalized=False, **kwargs):
         """Returns the most likely next state"""

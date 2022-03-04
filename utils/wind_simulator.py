@@ -20,6 +20,10 @@
 # gust speed first, then windspeed
 
 # %%
+# Questions:
+# How often do gusts happen?
+# Most stressful situations?
+
 weather_data = [
     (20.6,9.2),
     (20.6,8.8),

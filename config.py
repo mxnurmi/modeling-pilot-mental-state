@@ -9,9 +9,14 @@ EPSILON = 1e-3
 #SIZE = (8, 8)
 #WIND_PROB = 1
 
+#  TODO: TO BE ADDED:
+# - fuel dumb at 40% way where you only have enough fuel for return
+# - Wind changes midway to favor original airport
+# - Plane is ordered to return (DIFFICULT! -> do one of the above instead)
+# - DO THIS: 
+# - Correct amount of fuel becomes uncertain (NOTE: Increasing uncertainty should be linked to stress!)
 
-# MOVE TO CONFIG
-def init_scenario(wind=None):
+def init_scenario(wind=None, fuel=None):
     n = random.randint(4, 9)
     global SIZE
     SIZE = (n, n)
@@ -39,3 +44,8 @@ def init_scenario(wind=None):
     global START_FUEL
     START_FUEL = random.randint(8, 20)
 
+    global FUEL_PROB
+    if fuel == None:
+        FUEL_PROB = random.uniform(0.95, 1)
+    else:
+        FUEL_PROB = fuel
