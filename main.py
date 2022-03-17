@@ -1,10 +1,12 @@
 # %%
 
+from attr import attr
 import pomdp_py
 import copy
 import math
 
 from scipy.stats import entropy
+from scipy.stats import norm
 
 #import pickle
 from pomdp_py.utils import TreeDebugger
@@ -36,7 +38,7 @@ import config
 
 def generate_random_state():
     location = config.LINKOPING_LOCATION
-    return PlaneState(location, True, config.START_FUEL)
+    return PlaneState(location, "takeoff", True, config.START_FUEL)
 
 
 def generate_init_belief(num_particles):
@@ -122,7 +124,7 @@ def runner_no_a(plane_problem, planner, nsteps=20, debug_tree=False, size=None, 
 
     while i < nsteps:
         true_state = copy.deepcopy(plane_problem.env.state)
-        true_location = true_state.location
+        #true_location = true_state.coordinates
 
         action = planner.plan(plane_problem.agent)
         env_reward = plane_problem.env.state_transition(
@@ -177,11 +179,11 @@ def runner_no_a(plane_problem, planner, nsteps=20, debug_tree=False, size=None, 
 
 
 def init_figure(coordinates, true_state):
-    fig = plt.figure(figsize=(20, 10))
+    fig = plt.figure(figsize=(20, 18))
     ax1 = fig.add_subplot(121)
     ax2 = fig.add_subplot(122)
     fig.set_dpi(120)
-    fig.set_size_inches(13, 8, forward=True)
+    fig.set_size_inches(13, 10, forward=True)
     # bbox = dict(facecolor = 'grey', alpha = 0.5))
     plot_text = ax2.text(-0.8, -3.2, '', fontsize=15, weight="bold")
     im = ax2.imshow(coordinates, origin='lower', cmap='gray')
@@ -205,12 +207,15 @@ def pomdp_step(plane_problem, planner):
         plane_problem.agent.observation_model, action)
     plane_problem.agent.update_history(action, real_observation)
     planner.update(plane_problem.agent, action, real_observation)
-    plane_location = true_state.location
+    plane_location = true_state.coordinates
 
     return action, true_state, plane_location, env_reward
 
 
 total_reward = 0
+
+def normalize_value(x, min_value, max_value):
+    return ((x - min_value) / (max_value - min_value))
 
 def normalized_entropy(probs):
     len_data = len(probs)
@@ -225,7 +230,12 @@ def normalized_entropy(probs):
 
     return ent
 
-def compute_stress(agent):
+def compute_stress(agent, num_sims):
+    """
+
+    num_sims: number of simulations done on this round. Used to normalize complexity. 
+    """
+
     # Annoying to use treedebbuger, should have direct access NOTE: maybe implement later
     dd = TreeDebugger(agent.tree)
 
@@ -263,35 +273,70 @@ def compute_stress(agent):
         all_state_probs.append(state)
 
     shannon_entropy = entropy(all_state_probs, base=2)
-    norm_entropy = normalized_entropy(all_state_probs) # entropy between 0 and 1
-    # TODO: test norm_entropy!!
-    # -> Higher entropy/suprise means that we dont know which event is likely to happen -> leads to stress
-    #print("NORM ENTROPY:")
-    #print(norm_entropy)
-    #print("SHANNON ENTROPY")
-    #print(shannon_entropy)
-    #print("\n")
+    norm_entropy = normalized_entropy(all_state_probs) # shannon entropy normalized between 0 and 1
+    # -> Higher entropy means that we dont know which event is likely to happen -> leads to stress
+    # on the other hand, it should be noted that lower entropy means higher surprise!!
 
-    # TODO: # these should be normalized:
+    # complexity should be normalized, but how?
     complexity = dd.nn
+    #print("complexity")
+    #print(complexity)
+    #print("normalized complexity")
+    norm_complexity = complexity/num_sims
+
     expected_value = dd.c.value
+    #print("value stress")
+    #print(expected_value)
+    norm_value_stress = min(expected_value, 0) / (config.MAX_PUNISH - 10) # better way to adjust max punish?
+    #print(norm_value_stress)
 
     # TODO: Can we somehow measure when a change to an uncertain state happens? E.g. fuel dump has 10% chance but when it happens its unlikely so we should have a pump in stress
     # On the other hand, the effeect should be negative for stress to increase? E.g. wind changing benefits the pilot so should not stress?
 
     # Stress: Stress is created by acting normally in extraordinary situations
 
-    print("agent main belief")
-    print(agent.cur_belief.mpe())
+    #print("agent main belief")
+    belief = agent.cur_belief.mpe()
+    wind_state = belief.wind
+    fuel_state = belief.fuel
+    height_state = belief.position
 
-    # TODO: compute stress using surprise, complexity, expected value here
-    # TODO: Also add other variables?
+    # Compute "value stress"
+    value_stress = norm_value_stress
+    print("value stress")
+    print(norm_value_stress)
 
-    stress = 0
-    return stress
+    # Compute "attribute stress"
+    if height_state == "flying":
+        start_fuel = config.START_FUEL
+        x = norm.rvs(loc=35, scale=5, size=1)
+        maxx = 60
+        minx = 25
+        # limit min/max to 15/55 so we cant get values outside those and can normalize
+        x = max(min(x, maxx), minx)
+        # normalize between min and max stress
+        x = normalize_value(x, minx, maxx)
+        wind_estimation = x
+        attribute_stress = (wind_estimation + (1 - fuel_state/start_fuel)) / 2
+        print(attribute_stress)
+    else:
+        # Scaled so that we are more likely to stress from wind
+        start_fuel = config.START_FUEL
+        x = norm.rvs(loc=35, scale=5, size=1)
+        maxx = 45
+        minx = 10
+        x = max(min(x, maxx), minx)
+        x = normalize_value(x, minx, maxx)
+        wind_estimation = x
+        attribute_stress = (wind_estimation + (1 - fuel_state/start_fuel)) / 2
+
+    # Compute "predictability and control stress"
+    pred_ctrl_stress = (norm_complexity + norm_entropy) / 2
+
+    return value_stress, attribute_stress, pred_ctrl_stress
 
 
-def runner_a(plane_problem, planner, nsteps=20, size=None, save_animation=False, scenario_parameters=None):
+def runner_a(plane_problem, planner, nsteps=20, size=None, save_animation=False, scenario_parameters=None, stress_type="value"):
     """
     Animates and runs the action-feedback loop of Plane problem POMDP
 
@@ -305,7 +350,7 @@ def runner_a(plane_problem, planner, nsteps=20, size=None, save_animation=False,
     width = n
     height = k
     true_state = copy.deepcopy(plane_problem.env.state)
-    plane_location = true_state.location
+    plane_location = true_state.coordinates
     airport_location1 = config.MALMEN_LOCATION
     airport_location2 = config.LINKOPING_LOCATION
 
@@ -333,6 +378,7 @@ def runner_a(plane_problem, planner, nsteps=20, size=None, save_animation=False,
                                )
 
         else:
+            # TODO: we should have a call that prints the starting stage!
             action, true_state, plane_location, env_reward = pomdp_step(
                 plane_problem, planner)
 
@@ -354,10 +400,19 @@ def runner_a(plane_problem, planner, nsteps=20, size=None, save_animation=False,
             print_status(frame, planner, plane_problem, action, env_reward)
 
             # TODO: Change colormap upon plane crash?
-
-            stress = compute_stress(plane_problem.agent)
+            # if state = crashed, we should not compute stress?
+            value_stress, attribute_stress, predict_control_stress = compute_stress(plane_problem.agent, num_sims=planner.last_num_sims)
             #stress_normal = stress_model(
             #"normal_wind_based", belief_state, start_fuel=config.START_FUEL)
+
+            stress = 0
+
+            if stress_type == "value":
+                stress = value_stress
+            elif stress_type == "attribute":
+                stress = attribute_stress
+            elif stress_type == "predictability_control":
+                stress = predict_control_stress
             stress_data.append(stress)
 
             frame_data.append(frame)
@@ -374,18 +429,18 @@ def runner_a(plane_problem, planner, nsteps=20, size=None, save_animation=False,
         repeat=False
     )
     if save_animation:
-        anim.save("animation.gif", dpi=300, writer=PillowWriter(fps=2))
+        anim.save("animation.gif", dpi=300, writer=PillowWriter(fps=1))
     else:
         plt.show()
 
 
-def main(plot, steps=15, save_animation=False):
+def main(plot, steps=15, save_animation=False, stress="value"):
 
     # TODO: Init scenario here
-    config.init_scenario(wind=0.90, fuel=0.92)  # this should be called in config!!
+    config.init_scenario(wind=0.90, fuel=1, n=6)  # this should be called in config?
 
     init_true_state = PlaneState(
-        config.LINKOPING_LOCATION, True, config.START_FUEL)
+        config.LINKOPING_LOCATION, "takeoff", True, config.START_FUEL)
     init_belief = generate_init_belief(50)
 
     n = config.SIZE[0]
@@ -395,8 +450,8 @@ def main(plot, steps=15, save_animation=False):
 
     plane_problem.agent.set_belief(init_belief, prior=True)
 
-    pomcp = pomdp_py.POMCP(max_depth=5, discount_factor=0.85,  # what does the discount_factor do?
-                           planning_time=2, num_sims=-1, exploration_const=100,
+    pomcp = pomdp_py.POMCP(max_depth=6, discount_factor=0.85,  # what does the discount_factor do?
+                           planning_time=1.5, num_sims=-1, exploration_const=100,
                            rollout_policy=plane_problem.agent.policy_model,
                            show_progress=False, pbar_update_interval=1000)
 
@@ -405,11 +460,11 @@ def main(plot, steps=15, save_animation=False):
                     nsteps=steps, size=(n, k))
     else:
         runner_a(plane_problem, planner=pomcp,
-                 nsteps=steps, size=(n, k), save_animation=save_animation)
+                 nsteps=steps, size=(n, k), save_animation=save_animation, stress_type=stress)
 
 
 if __name__ == '__main__':
-    main(plot=True, steps=15, save_animation=True)
+    main(plot=True, steps=15, save_animation=True, stress="attribute")
 
 # Stress should come from either high uncertainty with likely negative reward or
 # high chance of negative reward

@@ -54,24 +54,27 @@ class LandAction(PlaneAction):
 
 # https://h2r.github.io/pomdp-py/html/_modules/pomdp_problems/tag/domain/state.html#TagState
 class PlaneState(pomdp_py.State):
-    def __init__(self, location, wind, fuel):
-        self.location = location
+    def __init__(self, coordinates, position, wind, fuel):
+        self.coordinates = coordinates
+        self.position = position
         self.wind = wind
         self.fuel = fuel
 
     def __hash__(self):
-        return hash((self.location, self.wind, self.fuel))
+        return hash((self.coordinates, self.position, self.wind, self.fuel)) #self.location
 
     def __eq__(self, other):
         if isinstance(other, PlaneState):
             # checks if the other state has identical name to this
-            return self.location == other.location\
+            return self.coordinates == other.coordinates\
+                and self.position == other.position\
                 and self.wind == other.wind\
                 and self.fuel == other.fuel
         return False
 
     def __str__(self):
-        return 'State(%s| %s, %s)' % (str(self.location),
+        return 'State(%s| %s, %s, %s)' % (str(self.coordinates), #TODO: Is | correct in string format?
+                                      str(self.position),
                                       str(self.wind),
                                       str(self.fuel)
                                       )

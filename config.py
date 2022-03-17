@@ -16,8 +16,11 @@ EPSILON = 1e-3
 # - DO THIS: 
 # - Correct amount of fuel becomes uncertain (NOTE: Increasing uncertainty should be linked to stress!)
 
-def init_scenario(wind=None, fuel=None):
-    n = random.randint(4, 9)
+def init_scenario(wind=None, fuel=None, dumb_amount=None, n=None):
+    global MAX_PUNISH
+    MAX_PUNISH = -10000
+    if n == None:
+        n = random.randint(4, 9)
     global SIZE
     SIZE = (n, n)
 
@@ -28,9 +31,7 @@ def init_scenario(wind=None, fuel=None):
 
     global MALMEN_LOCATION
     MALMEN_LOCATION = LINKOPING_LOCATION
-    print(dist(MALMEN_LOCATION, LINKOPING_LOCATION))
-    print(MALMEN_LOCATION)
-    print(LINKOPING_LOCATION)
+
     while dist(MALMEN_LOCATION, LINKOPING_LOCATION) <= 2:
         # TODO: chek that this works as intended
         MALMEN_LOCATION = (random.randint(0, n-1), random.randint(0, n-1))
@@ -42,10 +43,17 @@ def init_scenario(wind=None, fuel=None):
         WIND_PROB = wind
 
     global START_FUEL
-    START_FUEL = random.randint(8, 20)
+    START_FUEL = random.randint(10, 20)
 
     global FUEL_PROB
     if fuel == None:
         FUEL_PROB = random.uniform(0.95, 1)
     else:
         FUEL_PROB = fuel
+
+    global DUMB_AMOUNT
+    if dumb_amount == None:
+        DUMB_AMOUNT = random.randint(1,5)
+    else:
+        DUMB_AMOUNT = dumb_amount
+    
