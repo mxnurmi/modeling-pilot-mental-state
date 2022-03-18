@@ -5,9 +5,6 @@ import pomdp_py
 import copy
 import math
 
-from scipy.stats import entropy
-from scipy.stats import norm
-
 #import pickle
 from pomdp_py.utils import TreeDebugger
 
@@ -20,6 +17,8 @@ from visualizers.visual import get_coordinates
 
 from pomdp.models import *
 from pomdp.problem import PlaneProblem
+
+from stress import stress_estimator
 
 import config
 
@@ -214,127 +213,6 @@ def pomdp_step(plane_problem, planner):
 
 total_reward = 0
 
-def normalize_value(x, min_value, max_value):
-    return ((x - min_value) / (max_value - min_value))
-
-def normalized_entropy(probs):
-    len_data = len(probs)
-    base = 2.
-    if len_data <= 1:
-        return 0
-
-    ent = 0
-    for p in probs:
-        if p > 0.:
-            ent -= (p * math.log(p, base)) / math.log(len_data, base)
-
-    return ent
-
-def compute_stress(agent, num_sims):
-    """
-
-    num_sims: number of simulations done on this round. Used to normalize complexity. 
-    """
-
-    # Annoying to use treedebbuger, should have direct access NOTE: maybe implement later
-    dd = TreeDebugger(agent.tree)
-
-    # BRIEF DOCUMENTATION:
-    # print(dd.bestseqd(2)) # best sequence
-    # print(dd.nn) # all nodes
-    # print(dd.nv) # vnodes
-    # print(dd.nq) # whst are qnodes -> below
-    # print(dd.c.children) # children of a node
-    # print(dd.p(2)) # print 2 layers of the tree
-    # print(dd[0].value) # access value of specific node
-    # print(dd.c.value) # of current node
-    # node.num_visits # for visit amounts
-    # node.value # for value
-
-    # QNodes (value represents Q(b,a); children are observations) e.g. actions
-    # VNodes (value represents V(b); children are actions). e.g. None, True, False
-    # combining qnodes to vnodes = all nodes
-
-    # print(dd.mbp) # best path
-    # STRESS MODELS
-    # MODEL1: dd.c.value normalized between 0-1
-    # MODEL2: Gas and wind
-    # MODEL3: Value estimate in combination with amount of nodes?
-    # maybe Qnodes to Vnodes ratio as control? -> not good
-
-    # Nodes could reflect uncertainty (amount of options) when combined with Entropy
-    # Value could reflect controllability (lack of control is negative, having control positive)
-
-    # get probabilities for each state
-    state_prob_dict = agent.cur_belief.get_histogram()
-    all_state_probs = []
-    for key in state_prob_dict:
-        state = state_prob_dict[key]
-        all_state_probs.append(state)
-
-    shannon_entropy = entropy(all_state_probs, base=2)
-    norm_entropy = normalized_entropy(all_state_probs) # shannon entropy normalized between 0 and 1
-    # -> Higher entropy means that we dont know which event is likely to happen -> leads to stress
-    # on the other hand, it should be noted that lower entropy means higher surprise!!
-
-    # complexity should be normalized, but how?
-    complexity = dd.nn
-    #print("complexity")
-    #print(complexity)
-    #print("normalized complexity")
-    norm_complexity = complexity/num_sims
-
-    expected_value = dd.c.value
-    #print("value stress")
-    #print(expected_value)
-    norm_value_stress = min(expected_value, 0) / (config.MAX_PUNISH - 10) # better way to adjust max punish?
-    #print(norm_value_stress)
-
-    # TODO: Can we somehow measure when a change to an uncertain state happens? E.g. fuel dump has 10% chance but when it happens its unlikely so we should have a pump in stress
-    # On the other hand, the effeect should be negative for stress to increase? E.g. wind changing benefits the pilot so should not stress?
-
-    # Stress: Stress is created by acting normally in extraordinary situations
-
-    #print("agent main belief")
-    belief = agent.cur_belief.mpe()
-    wind_state = belief.wind
-    fuel_state = belief.fuel
-    height_state = belief.position
-
-    # Compute "value stress"
-    value_stress = norm_value_stress
-    print("value stress")
-    print(norm_value_stress)
-
-    # Compute "attribute stress"
-    if height_state == "flying":
-        start_fuel = config.START_FUEL
-        x = norm.rvs(loc=35, scale=5, size=1)
-        maxx = 60
-        minx = 25
-        # limit min/max to 15/55 so we cant get values outside those and can normalize
-        x = max(min(x, maxx), minx)
-        # normalize between min and max stress
-        x = normalize_value(x, minx, maxx)
-        wind_estimation = x
-        attribute_stress = (wind_estimation + (1 - fuel_state/start_fuel)) / 2
-        print(attribute_stress)
-    else:
-        # Scaled so that we are more likely to stress from wind
-        start_fuel = config.START_FUEL
-        x = norm.rvs(loc=35, scale=5, size=1)
-        maxx = 45
-        minx = 10
-        x = max(min(x, maxx), minx)
-        x = normalize_value(x, minx, maxx)
-        wind_estimation = x
-        attribute_stress = (wind_estimation + (1 - fuel_state/start_fuel)) / 2
-
-    # Compute "predictability and control stress"
-    pred_ctrl_stress = (norm_complexity + norm_entropy) / 2
-
-    return value_stress, attribute_stress, pred_ctrl_stress
-
 
 def runner_a(plane_problem, planner, nsteps=20, size=None, save_animation=False, scenario_parameters=None, stress_type="value"):
     """
@@ -401,7 +279,7 @@ def runner_a(plane_problem, planner, nsteps=20, size=None, save_animation=False,
 
             # TODO: Change colormap upon plane crash?
             # if state = crashed, we should not compute stress?
-            value_stress, attribute_stress, predict_control_stress = compute_stress(plane_problem.agent, num_sims=planner.last_num_sims)
+            value_stress, attribute_stress, predict_control_stress = stress_estimator.compute_stress(plane_problem.agent, num_sims=planner.last_num_sims)
             #stress_normal = stress_model(
             #"normal_wind_based", belief_state, start_fuel=config.START_FUEL)
 
