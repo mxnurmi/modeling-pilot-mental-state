@@ -9,6 +9,9 @@ sys.path.insert(0, parentdir)
 
 import config
 
+# Stress should come from either high uncertainty with likely negative reward or
+# high chance of negative reward
+
 def compute_value_stress(dd):
     #dd = TreeDebugger(agent.tree)
     expected_value = dd.c.value

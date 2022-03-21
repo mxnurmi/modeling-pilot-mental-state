@@ -22,6 +22,10 @@ from stress import stress_estimator
 
 import config
 
+import numpy as np
+np.warnings.filterwarnings('ignore', category=np.VisibleDeprecationWarning)       
+
+# TODO:
 # - Pickle support?
 
 # TODO: Need a way to define:
@@ -34,6 +38,31 @@ import config
 # lead to the agent falling. The higher the chance that it did, the more stressed agent is.
 # However, this would approximate the threat to agent but how do we quantify uncertainty
 
+place_holder = """
+    Define the plane scenarios
+
+    We have X options (that can happen concurrently):
+    - Wind changes randomly near closest airport to make it unfavorable, but is favorable at second
+
+    Parameters should probably be something like 
+    crosswind at airport1 and crosswind at airport2?
+
+    For some of these we need to calculate the square that is half
+    Way to the destination
+
+    # Wind attributes:
+    # Wind direction: wind_direction_degt[0] (north being 0)
+    # Wind altitude: wind_altitude_msl_m[0]
+    # Wind speed: wind_speed_kt[0]
+
+    wind_attributes = (0, 0, 0)  # dir, alt, speed
+    fuel_dump = False  # will fuel be dumped mid flight
+    turning_wind = False  # will wind turn mid flight
+    refuse_landing = False  # the destination airport will refuse initial landing
+    hidden_fuel = False  # fuel meter gets frozen
+"""
+# wind should linearly transition to next average. Possibly we could have some normal sampling from that linear function as well
+# gusts last max 20second and should only happen with maybe 1/8 or 1/10 of a chance
 
 def generate_random_state():
     location = config.LINKOPING_LOCATION
@@ -46,44 +75,6 @@ def generate_init_belief(num_particles):
         particles.append(generate_random_state())
 
     return pomdp_py.Particles(particles)
-
-
-class PlaneScenario():
-    """
-    Define the plane scenarios
-
-    We have X options (that can happen concurrently):
-    - Wind changes randomly near closest airport to make it unfavorable, but is favorable at second
-    - 
-
-    Parameters should probably be something like 
-    crosswind at airport1 and crosswind at airport2?
-
-    For some of these we need to calculate the square that is half
-    Way to the destination
-    """
-
-    # Wind attributes:
-    # Wind direction: wind_direction_degt[0] (north being 0)
-    # Wind altitude: wind_altitude_msl_m[0]
-    # Wind speed: wind_speed_kt[0]
-
-    # Fuel visualizer?:
-    # fuel_pressure_psi ?
-    # rel_g_fuel ?
-    # rel_fp_ind_0 ?
-
-    # dump_fuel -> maybe a switch that dumps the fuel
-
-    def __init__(self):
-        wind_attributes = (0, 0, 0)  # dir, alt, speed
-        fuel_dump = False  # will fuel be dumped mid flight
-        turning_wind = False  # will wind turn mid flight
-        refuse_landing = False  # the destination airport will refuse initial landing
-        hidden_fuel = False  # fuel meter gets frozen
-
-# wind should linearly transition to next average. Possibly we could have some normal sampling from that linear function as well
-# gusts last max 20second and should only happen with maybe 1/8 or 1/10 of a chance
 
 
 def print_status(frame, planner, plane_problem, action, env_reward, output=True):
@@ -104,79 +95,6 @@ def print_status(frame, planner, plane_problem, action, env_reward, output=True)
     print("\n")
 
 
-def runner_no_a(plane_problem, planner, nsteps=20, debug_tree=False, size=None, plot=False):
-    """
-    Runs the action-feedback loop of Plane problem POMDP
-
-    Args:
-        plane_problem (PlaneProblem): an instance of the plane problem.
-        planner (Planner): a planner
-        nsteps (int): Maximum number of steps to run this loop.
-    """
-    # ----Scenario task----
-    # TODO: We should import the scenarios!
-
-    total_reward = 0
-    stress_states_sine = []
-    stress_states_normal = []
-    i = 0
-
-    while i < nsteps:
-        true_state = copy.deepcopy(plane_problem.env.state)
-        #true_location = true_state.coordinates
-
-        action = planner.plan(plane_problem.agent)
-        env_reward = plane_problem.env.state_transition(
-            action, execute=True)  # TODO: use this for sampling
-        total_reward += env_reward
-
-        print_status(i, planner, plane_problem, action, env_reward)
-
-        if debug_tree == True:
-            dd = TreeDebugger(plane_problem.agent.tree)
-            print(dd.pp)
-            print(dd.mbp)  # TODO: what is the "none" leaf?
-            print("\n")
-
-        real_observation = plane_problem.env.provide_observation(
-            plane_problem.agent.observation_model, action)
-        plane_problem.agent.update_history(action, real_observation)
-        planner.update(plane_problem.agent, action, real_observation)
-
-        # TODO: move this inside the stress function
-        # TODO: Make sure we always pick strongest belief (now pick first?)
-        for belief in plane_problem.agent.cur_belief:
-            belief_state = belief
-            break
-
-        
-        #stress_sine = stress_model(
-        #    "sine_wind_based", belief_state, start_fuel=config.START_FUEL)
-        #stress_normal = stress_model(
-        #    "normal_wind_based", belief_state, start_fuel=config.START_FUEL)
-        #stress_expected_reward = stress_function("expected_negative_reward", plane_problem=plane_problem)
-        #stress_states_sine.append(stress_sine)
-        #stress_states_normal.append(stress_normal)
-        # TODO: FIX stress models FOR THIS
-        raise NotImplementedError
-
-        i += 1
-
-    som = plane_problem.agent
-    # with open(f'test.pickle', 'wb') as file:
-    #pickle.dump(som, file)
-
-    # load it
-    # with open(f'test.pickle', 'rb') as file2:
-    #s1_new = pickle.load(file2)
-
-    # print("pickle")
-    # print(s1_new)
-
-    print("\n")
-    print("=== DONE ===")
-
-
 def init_figure(coordinates, true_state):
     fig = plt.figure(figsize=(20, 18))
     ax1 = fig.add_subplot(121)
@@ -193,6 +111,8 @@ def init_figure(coordinates, true_state):
                        + "\n" + "State:" + str(true_state)
                        )
     ax1.set_title(f"Stress", fontsize=20)
+    ax1.set_ylim(0, 1)
+    ax1.plot([-1], [-1], color="r", lw=4)
 
     return fig, im, plot_text, ax1, ax2
 
@@ -214,7 +134,7 @@ def pomdp_step(plane_problem, planner):
 total_reward = 0
 
 
-def runner_a(plane_problem, planner, nsteps=20, size=None, save_animation=False, scenario_parameters=None, stress_type="value"):
+def runner_a(plane_problem, planner, nsteps=20, size=None, save_animation=False, scenario_parameters=None, stress_type="predictability_control"):
     """
     Animates and runs the action-feedback loop of Plane problem POMDP
 
@@ -242,8 +162,8 @@ def runner_a(plane_problem, planner, nsteps=20, size=None, save_animation=False,
         im.set_array(coordinates)
         return im
 
-    stress_data = []
-    frame_data = []
+    stress_data = [-1]
+    frame_data = [-1]
 
     def animate_func(frame):
         global total_reward  # hacky way to update total_reward
@@ -307,15 +227,28 @@ def runner_a(plane_problem, planner, nsteps=20, size=None, save_animation=False,
         repeat=False
     )
     if save_animation:
-        anim.save("animation.gif", dpi=300, writer=PillowWriter(fps=1))
+        anim.save("animations/animation.gif", dpi=300, writer=PillowWriter(fps=1))
     else:
         plt.show()
 
+    # TODO: Pickle support for storing agents
+    #agent = plane_problem.agent
+    # with open(f'test.pickle', 'wb') as file:
+    #pickle.dump(agent, file)
 
-def main(plot, steps=15, save_animation=False, stress="value"):
+    # load it
+    # with open(f'test.pickle', 'rb') as file2:
+    #cloned_agent = pickle.load(file2)
+
+
+def main(steps=15, save_animation=False, stress="value"):
 
     # TODO: Init scenario here
     config.init_scenario(wind=0.90, fuel=1, n=6)  # this should be called in config?
+
+    # TODO: We should be able to init some standard scenarios!
+    # And have one pickle loaded agent to fly those!
+    # -> this way we can compare stress models
 
     init_true_state = PlaneState(
         config.LINKOPING_LOCATION, "takeoff", True, config.START_FUEL)
@@ -333,57 +266,12 @@ def main(plot, steps=15, save_animation=False, stress="value"):
                            rollout_policy=plane_problem.agent.policy_model,
                            show_progress=False, pbar_update_interval=1000)
 
-    if plot == False:
-        runner_no_a(plane_problem, planner=pomcp,
-                    nsteps=steps, size=(n, k))
-    else:
-        runner_a(plane_problem, planner=pomcp,
-                 nsteps=steps, size=(n, k), save_animation=save_animation, stress_type=stress)
+
+    runner_a(plane_problem, planner=pomcp,
+                nsteps=steps, size=(n, k), save_animation=save_animation, stress_type=stress)
 
 
 if __name__ == '__main__':
-    main(plot=True, steps=15, save_animation=True, stress="attribute")
+    main(steps=15, save_animation=False, stress="attribute")
 
-# Stress should come from either high uncertainty with likely negative reward or
-# high chance of negative reward
 
-#### POUCT MODEL #####
-
-    #po_rollout = pomdp_py.PORollout()
-
-    # pouct = pomdp_py.POUCT(max_depth=10, discount_factor=0.999,  # what does the discount_factor do?
-    #                       num_sims=1000, exploration_const=1000,
-    #                       rollout_policy=plane_problem.agent.policy_model,
-    #                       show_progress=True, pbar_update_interval=1000)
-
-exit()
-
-# %%
-from scipy.stats import entropy
-import math
-
-def normalized_entropy(probs):
-    len_data = len(probs)
-    base = 2.
-    if len_data <= 1:
-        return 0
-
-    #counts = Counter()
-
-    #for d in data:
-        #counts[d] += 1
-
-    ent = 0
-
-    #probs = [float(c) / len(data) for c in counts.values()]
-    for p in probs:
-        if p > 0.:
-            ent -= (p * math.log(p, base))#/math.log(len_data, base)
-
-    return ent
-
-data = [0.5, 0.5]
-print(entropy(data, base=2))
-
-print(normalized_entropy(data))
-# %%

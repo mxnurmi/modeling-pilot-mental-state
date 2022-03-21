@@ -2,9 +2,9 @@ import random
 from math import dist
 
 EPSILON = 1e-3
-#START_FUEL = 20  # also max fuel
+# START_FUEL = 20  # also max fuel
 #STRESS = 0
-#MALMEN_LOCATION = (1, 1)  # (7, 9)
+# MALMEN_LOCATION = (1, 1)  # (7, 9)
 #LINKOPING_LOCATION = (5, 5)
 #SIZE = (8, 8)
 #WIND_PROB = 1
@@ -13,47 +13,73 @@ EPSILON = 1e-3
 # - fuel dumb at 40% way where you only have enough fuel for return
 # - Wind changes midway to favor original airport
 # - Plane is ordered to return (DIFFICULT! -> do one of the above instead)
-# - DO THIS: 
+# - DO THIS:
 # - Correct amount of fuel becomes uncertain (NOTE: Increasing uncertainty should be linked to stress!)
 
-def init_scenario(wind=None, fuel=None, dumb_amount=None, n=None):
+
+def run_scenario(number="one"):
+    init_scenario()
+
+
+def init_scenario(wind=None, fuel_amount=None, fuel_keep_chance=None, fuel_dumb_amount=None, n=None, airport1_coor=None, airport2_coor=None):
+    # Maximum punishment
     global MAX_PUNISH
     MAX_PUNISH = -10000
+
+    # Map size
     if n == None:
         n = random.randint(4, 9)
     global SIZE
     SIZE = (n, n)
 
-    lin_x = random.randint(0, n-1)
-    lin_y = random.randint(0, n-1)
+    # Start location coordinates
     global LINKOPING_LOCATION
-    LINKOPING_LOCATION = (lin_x, lin_y)
+    if airport1_coor == None:
+        lin_x = random.randint(0, n-1)
+        lin_y = random.randint(0, n-1)
+        LINKOPING_LOCATION = (lin_x, lin_y)
+    else:
+        if type(airport1_coor) is not tuple:
+            raise TypeError("Airport coordinates must be of type tuple")
+        LINKOPING_LOCATION = airport1_coor
 
+    # Landing location coordinates
     global MALMEN_LOCATION
-    MALMEN_LOCATION = LINKOPING_LOCATION
+    if airport2_coor == None:
+        MALMEN_LOCATION = LINKOPING_LOCATION
+        while dist(MALMEN_LOCATION, LINKOPING_LOCATION) <= 2:
+            # Make sure we have enough distnce
+            # TODO: chek that this works as intended
+            MALMEN_LOCATION = (random.randint(0, n-1), random.randint(0, n-1))
+    else:
+        if type(airport2_coor) is not tuple:
+            raise TypeError("Airport coordinates must be of type tuple")
+        MALMEN_LOCATION = airport2_coor
 
-    while dist(MALMEN_LOCATION, LINKOPING_LOCATION) <= 2:
-        # TODO: chek that this works as intended
-        MALMEN_LOCATION = (random.randint(0, n-1), random.randint(0, n-1))
-    
+    # Wind change probability
     global WIND_PROB
     if wind == None:
         WIND_PROB = random.uniform(0.5, 1)
     else:
         WIND_PROB = wind
 
+    # Fuel start amount
     global START_FUEL
-    START_FUEL = random.randint(10, 20)
+    if fuel_amount == None:
+        START_FUEL = random.randint(10, 20)
+    else:
+        START_FUEL = fuel_amount
 
+    # Fuel keep chance
     global FUEL_PROB
-    if fuel == None:
+    if fuel_keep_chance == None:
         FUEL_PROB = random.uniform(0.95, 1)
     else:
-        FUEL_PROB = fuel
+        FUEL_PROB = fuel_keep_chance
 
+    # Fuel drop amount
     global DUMB_AMOUNT
-    if dumb_amount == None:
-        DUMB_AMOUNT = random.randint(1,5)
+    if fuel_dumb_amount == None:
+        DUMB_AMOUNT = random.randint(2, 5)
     else:
-        DUMB_AMOUNT = dumb_amount
-    
+        DUMB_AMOUNT = fuel_dumb_amount  # if one then the same as no drop
