@@ -18,7 +18,13 @@ EPSILON = 1e-3
 
 
 def run_scenario(number="one"):
-    init_scenario()
+    if number == "one":
+        # easy scenario where plane has to land into other end of the map with plenty of fuel to spare
+        init_scenario(wind=1, fuel_amount=11, fuel_keep_chance=1, n=7, airport1_coor=(2,2), airport2_coor=(4,5))
+    elif number == "two":
+        init_scenario()
+    elif number == "three":
+        init_scenario()
 
 
 def init_scenario(wind=None, fuel_amount=None, fuel_keep_chance=None, fuel_dumb_amount=None, n=None, airport1_coor=None, airport2_coor=None):
@@ -83,3 +89,4 @@ def init_scenario(wind=None, fuel_amount=None, fuel_keep_chance=None, fuel_dumb_
         DUMB_AMOUNT = random.randint(2, 5)
     else:
         DUMB_AMOUNT = fuel_dumb_amount  # if one then the same as no drop
+

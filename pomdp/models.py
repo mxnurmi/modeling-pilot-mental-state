@@ -2,6 +2,8 @@
 import pomdp_py
 import random
 
+from math import dist
+
 import os
 import sys
 import inspect
@@ -19,6 +21,12 @@ sys.path.insert(0, parentdir)
 import config
 
 class TransitionModel(pomdp_py.TransitionModel):
+
+    # TODO: We should add some kind of "compute distance" function that keeps track of plane coordinates and computes the distance
+    # So that agent only maintains that distance and no coordinates.
+    # Way to do this:
+    # Global coordinates variable that is only updated after an agent takes action?
+    # -> Problem: Now sampling doesn't work because we can't update sampling state
 
     def __init__(self, n, k):
         self._n = n
@@ -48,6 +56,7 @@ class TransitionModel(pomdp_py.TransitionModel):
         wind_state = random.choices([True, False], weights=[
                                     config.WIND_PROB, 1-config.WIND_PROB], k=1)[0]
 
+
         fuel_state = random.choices([state.fuel - 1, state.fuel - config.DUMB_AMOUNT], weights=[
                                     config.FUEL_PROB, 1-config.FUEL_PROB], k=1)[0]
 
@@ -75,17 +84,18 @@ class TransitionModel(pomdp_py.TransitionModel):
 
             if state.position == "takeoff":
                 if successfull_takeoff:
-                    return PlaneState(new_coordinates, "flying", wind_state, fuel_state-1)
+                    return PlaneState(new_coordinates, "flying", wind_state, fuel_state)
                 else:
-                    return PlaneState(state.coordinates, "takeoff", wind_state, fuel_state-1)
+                    return PlaneState(state.coordinates, "takeoff", wind_state, fuel_state)
 
-            return PlaneState(new_coordinates, state.position, wind_state, fuel_state-1)
+            return PlaneState(new_coordinates, state.position, wind_state, fuel_state)
 
         # backup. TODO: Better solution?
         return PlaneState(state.coordinates, state.position, state.wind, fuel_state)
 
     def argmax(self, state, action, normalized=False, **kwargs):
         """Returns the most likely next state"""
+        raise NotImplementedError
         return self.sample(state, action)
 
 

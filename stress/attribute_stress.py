@@ -24,7 +24,7 @@ def compute_attribute_stress(agent):
 
     if height_state == "flying":
         start_fuel = config.START_FUEL
-        x = norm.rvs(loc=35, scale=5, size=1)
+        x = norm.rvs(loc=35, scale=5, size=1)[0]
         maxx = 60
         minx = 25
         # limit min/max to 15/55 so we cant get values outside those and can normalize
@@ -33,15 +33,20 @@ def compute_attribute_stress(agent):
         x = normalize_value(x, minx, maxx)
         wind_estimation = x
         attribute_stress = (wind_estimation + (1 - fuel_state/start_fuel)) / 2
+        print("attribute stress 1")
+        print(attribute_stress)
     else:
         # Scaled so that we are more likely to stress from wind
         start_fuel = config.START_FUEL
-        x = norm.rvs(loc=35, scale=5, size=1)
+        x = norm.rvs(loc=35, scale=5, size=1)[0]
         maxx = 45
         minx = 10
         x = max(min(x, maxx), minx)
         x = normalize_value(x, minx, maxx)
         wind_estimation = x
         attribute_stress = (wind_estimation + (1 - fuel_state/start_fuel)) / 2
+        #print("attribute stress 2")
 
+
+    
     return attribute_stress
