@@ -20,6 +20,7 @@ from pomdp.problem import PlaneProblem
 from stress import stress_estimator
 
 import numpy as np
+import pandas as pd
 np.warnings.filterwarnings('ignore', category=np.VisibleDeprecationWarning)
 
 # TODO:
@@ -64,7 +65,7 @@ place_holder = """
 
 def generate_random_state():
     location = config.LINKOPING_LOCATION
-    return PlaneState(location, "takeoff", True, config.START_FUEL)
+    return PlaneState(location, "pre-flight", True, config.START_FUEL)
 
 
 def generate_init_belief(num_particles):
@@ -75,7 +76,10 @@ def generate_init_belief(num_particles):
     return pomdp_py.Particles(particles)
 
 
-def print_status(frame, planner, plane_problem, action, env_reward, output=True):
+def print_status(frame, planner, plane_problem, action, env_reward, data_gathering_mode):
+    
+    if data_gathering_mode == True:
+        return
 
     true_state = copy.deepcopy(plane_problem.env.state)
 
@@ -117,7 +121,6 @@ def init_figure(coordinates, true_state):
 
 def pomdp_step(plane_problem, planner):
     action = planner.plan(plane_problem.agent)
-    print(action)
     env_reward = plane_problem.env.state_transition(
         action, execute=True)
     real_observation = plane_problem.env.provide_observation(
@@ -133,8 +136,77 @@ def pomdp_step(plane_problem, planner):
 
 total_reward = 0
 
+def process_data(attribute_stress_data, predict_control_stress_data, value_stress_data, state_data, end_state, scenario_name):
 
-def runner_a(plane_problem, planner, nsteps=20, size=None, save_animation=False, scenario_parameters=None, stress_type="predictability_control", save_agent=False):
+    end_state_data = [end_state] * len(state_data)
+
+    d = {'attribute_stress': attribute_stress_data, 'pred_control_stress': predict_control_stress_data, 'value_stress': value_stress_data, 'state_name': state_data, 'end_state': end_state_data}
+    df = pd.DataFrame(d)
+    output_path = "./data/stress_data_" + scenario_name + ".csv"
+    df.to_csv(output_path, mode='a', header=not os.path.exists(output_path))
+
+
+
+def runner_data_gather(plane_problem, planner, scenario_name, write_data=True):
+    """
+    Animates and runs the action-feedback loop of Plane problem POMDP
+
+    Args:
+        plane_problem (PlaneProblem): an instance of the plane problem.
+        planner (Planner): a planner
+        nsteps (int): Maximum number of steps to run this loop.
+    """
+
+    attribute_stress_data = [-1]
+    predict_control_stress_data = [-1]
+    value_stress_data = [-1]
+
+    frame_data = [-1]
+    state_data = ["preflight"]
+
+    def run_func(step):
+        global total_reward  # hacky way to update total_reward
+
+        #print(plane_problem.env.state.position)
+
+        # TODO: combine this with the one below?
+        if plane_problem.env.state.position == "landed" or plane_problem.env.state.position == "crashed":
+            #if write_data == True:
+                #process_data(attribute_stress_data, predict_control_stress_data, value_stress_data, state_data, end_state=plane_problem.env.state.position)
+            return True
+
+        else:
+
+            # TODO: This misses the first state "takeoff" but that state does not have a tree yet so should we kip it anyway?
+            _, _, _, _ = pomdp_step(
+                plane_problem, planner)
+
+            value_stress, attribute_stress, predict_control_stress = stress_estimator.compute_stress(
+                plane_problem.agent, num_sims=planner.last_num_sims)
+
+            value_stress_data.append(value_stress)
+            attribute_stress_data.append(attribute_stress)
+            predict_control_stress_data.append(predict_control_stress)
+            state_data.append(plane_problem.env.state.position)
+            frame_data.append(step)
+
+
+
+
+    for i in range(50):
+        complete = run_func(i)
+        if complete:
+            break
+
+    if write_data == True:
+        process_data(attribute_stress_data, predict_control_stress_data, value_stress_data, state_data, end_state=plane_problem.env.state.position, scenario_name=scenario_name)
+    # load it
+    # with open(f'test.pickle', 'rb') as file2:
+    #cloned_agent = pickle.load(file2)
+
+
+
+def runner_a(plane_problem, planner, nsteps=20, size=None, save_animation=False, write_data=True, save_agent=False, data_gathering_mode=False):
     """
     Animates and runs the action-feedback loop of Plane problem POMDP
 
@@ -162,7 +234,10 @@ def runner_a(plane_problem, planner, nsteps=20, size=None, save_animation=False,
         im.set_array(coordinates)
         return im
 
-    stress_data = [-1]
+    attribute_stress_data = [-1]
+    predict_control_stress_data = [-1]
+    value_stress_data = [-1]
+
     frame_data = [-1]
     state_data = ["preflight"]
 
@@ -170,7 +245,7 @@ def runner_a(plane_problem, planner, nsteps=20, size=None, save_animation=False,
         global total_reward  # hacky way to update total_reward
 
         # TODO: combine this with the one below?
-        if plane_problem.env.state.position == "landed":
+        if plane_problem.env.state.position == "landed" or plane_problem.env.state.position == "crashed":
             true_state = copy.deepcopy(plane_problem.env.state)
             plot_text.set_text("SIMULATION COMPLETE"
                                + "\nFinal state:" + str(true_state)
@@ -191,10 +266,14 @@ def runner_a(plane_problem, planner, nsteps=20, size=None, save_animation=False,
                 with open(f'saved_agents/agent.pickle', 'wb') as file:
                     pickle.dump(agent, file)
 
-            time.sleep(30)
-            exit()
-            # We can do this in a smarter way?
+            if data_gathering_mode == False:
+                time.sleep(20)
 
+            if write_data == True:
+                process_data(attribute_stress_data, predict_control_stress_data, value_stress_data, state_data, end_state=plane_problem.env.state.position)
+            exit() # annoyingly we have three possible exit points, where we have to process data
+
+        # TODO: We should not use this?
         elif frame == nsteps-1:
             true_state = copy.deepcopy(plane_problem.env.state)
             plot_text.set_text("SIMULATION COMPLETE"
@@ -202,8 +281,10 @@ def runner_a(plane_problem, planner, nsteps=20, size=None, save_animation=False,
                                + "\nTotal reward:" + str(total_reward)
                                )
             
-            time.sleep(30)
-            #return None
+            if data_gathering_mode == False:
+                time.sleep(20)
+            if write_data == True:
+                process_data(attribute_stress_data, predict_control_stress_data, value_stress_data, state_data, end_state=plane_problem.env.state.position)
             exit()
 
         else:
@@ -215,6 +296,7 @@ def runner_a(plane_problem, planner, nsteps=20, size=None, save_animation=False,
                     + "\n" + "Total reward: 0"
                     + "\n" + "State: " + str(true_state)
                     )
+                print_status(-1, planner, plane_problem, "-", "0", data_gathering_mode=data_gathering_mode)
                 time.sleep(1)
 
             action, true_state, plane_location, env_reward = pomdp_step(
@@ -233,67 +315,68 @@ def runner_a(plane_problem, planner, nsteps=20, size=None, save_animation=False,
                                )
 
             ax2.set_title(f"Step {frame+1}", fontsize=20)
-            print_status(frame, planner, plane_problem, action, env_reward)
+            print_status(frame, planner, plane_problem, action, env_reward, data_gathering_mode=data_gathering_mode)
 
             # TODO: Change colormap upon plane crash?
             # if state = crashed, we should not compute stress?
             value_stress, attribute_stress, predict_control_stress = stress_estimator.compute_stress(
                 plane_problem.agent, num_sims=planner.last_num_sims)
-            # stress_normal = stress_model(
-            # "normal_wind_based", belief_state, start_fuel=config.START_FUEL)
 
-            stress = 0
-
-            if stress_type == "value":
-                stress = value_stress
-            elif stress_type == "attribute":
-                stress = attribute_stress
-            elif stress_type == "predictability_control":
-                stress = predict_control_stress
+            value_stress_data.append(value_stress)
+            attribute_stress_data.append(attribute_stress)
+            predict_control_stress_data.append(predict_control_stress)
 
             state_data.append(plane_problem.agent.cur_belief.mpe().position)
-            stress_data.append(stress)
             frame_data.append(frame)
             # TODO: multiple stress function plots?
-            ax1.plot(frame_data, stress_data, color="r", lw=4)
+            ax1.plot(frame_data, predict_control_stress_data, color="r", lw=4)
             return im
 
-    anim = animation.FuncAnimation(
-        fig,
-        animate_func,
-        init_func=init_anim,
-        frames=nsteps,
-        interval=510,  # in ms
-        repeat=False
-    )
+    if data_gathering_mode == False:
+        anim = animation.FuncAnimation(
+            fig,
+            animate_func,
+            init_func=init_anim,
+            frames=nsteps,
+            interval=510,  # in ms
+            repeat=False
+        )
+    else:
+        anim = animation.FuncAnimation(
+            fig,
+            animate_func,
+            init_func=init_anim,
+            frames=nsteps,
+            interval=1,
+            repeat=False
+        )
 
 
-    if save_animation:
+    if save_animation or data_gathering_mode:
         anim.save("animations/animation.gif",
                   dpi=300, writer=PillowWriter(fps=1))
     else:
         plt.show()
 
-    print(frame_data)
-    print(stress_data)
-    print(state_data)
+    if write_data == True:
+        process_data(attribute_stress_data, predict_control_stress_data, value_stress_data, state_data, end_state=plane_problem.env.state.position)
     # load it
     # with open(f'test.pickle', 'rb') as file2:
     #cloned_agent = pickle.load(file2)
 
-
-def main(steps=15, save_animation=False, stress="value", save_agent=False, load_agent=False):
+# TODO: Create a function for gathering data that does not have func_anim
+def main(steps=15, save_animation=False, stress="value", save_agent=False, load_agent=False, scenario_number="one"):
 
     # TODO: Init scenario here
     # config.init_scenario(wind=0.90, fuel_keep_chance=1, n=6)  # this should be called in config?
-    config.run_scenario("one")
+    config.run_scenario(scenario_number)
 
     # TODO: We should be able to init some standard scenarios!
     # And have one pickle loaded agent to fly those!
     # -> this way we can compare stress models
 
     init_true_state = PlaneState(
-        config.LINKOPING_LOCATION, "takeoff", True, config.START_FUEL)
+        config.LINKOPING_LOCATION, "pre-flight", True, config.START_FUEL)
     init_belief = generate_init_belief(50)
 
     n = config.SIZE[0]
@@ -310,13 +393,22 @@ def main(steps=15, save_animation=False, stress="value", save_agent=False, load_
             plane_problem.agent = pickle.load(file2)
 
     pomcp = pomdp_py.POMCP(max_depth=6, discount_factor=0.85,  # what does the discount_factor do?
-                           planning_time=2, num_sims=-1, exploration_const=100,
+                           planning_time=-1, num_sims=10000, exploration_const=100,
                            rollout_policy=plane_problem.agent.policy_model,
                            show_progress=False, pbar_update_interval=1000)
 
-    runner_a(plane_problem, planner=pomcp,
-             nsteps=steps, size=(n, k), save_animation=save_animation, stress_type=stress, save_agent=save_agent)
+    for i in range(101):
+        print(f"\n --Loop {i}--")
+        runner_data_gather(plane_problem, pomcp, scenario_name=("scenario_"+scenario_number), write_data=True)
+
+        # reset
+        init_belief = generate_init_belief(50)
+        plane_problem.agent.set_belief(init_belief, prior=True)
+        plane_problem = PlaneProblem(n, k, init_true_state, init_belief)
+
+    #runner_a(plane_problem, planner=pomcp,
+            #nsteps=steps, size=(n, k), save_animation=save_animation, save_agent=save_agent, data_gathering_mode=True)
 
 
 if __name__ == '__main__':
-    main(steps=15, save_animation=False, stress="attribute", save_agent=False, load_agent=False)
+    main(steps=100, save_animation=False, stress="attribute", save_agent=False, load_agent=False, scenario_number="two")

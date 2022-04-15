@@ -22,7 +22,7 @@ def run_scenario(number="one"):
         # easy scenario where plane has to land into other end of the map with plenty of fuel to spare
         init_scenario(wind=1, fuel_amount=11, fuel_keep_chance=1, n=7, airport1_coor=(2,2), airport2_coor=(4,5))
     elif number == "two":
-        init_scenario()
+        init_scenario(wind=1, fuel_amount=18, fuel_keep_chance=1, n=9, airport1_coor=(2,3), airport2_coor=(7,8))
     elif number == "three":
         init_scenario()
 

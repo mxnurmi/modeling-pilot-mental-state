@@ -43,11 +43,12 @@ class TransitionModel(pomdp_py.TransitionModel):
         else:
             return 1 - config.EPSILON
 
-    # TODO: We should add some takeoff stage and landing stage
-
     def sample(self, state, action):
+        if state.position == "pre-flight":
+            return PlaneState(config.LINKOPING_LOCATION, "takeoff", True, config.START_FUEL) 
+
         if state.position == "landed" or state.position == "crashed":
-            return PlaneState(config.LINKOPING_LOCATION, "takeoff", True, config.START_FUEL)  # reset
+            return PlaneState(config.LINKOPING_LOCATION, "pre-flight", True, config.START_FUEL)  # reset
 
         if state.fuel < 1:
             return PlaneState(state.coordinates, "crashed", True, state.fuel)
@@ -129,7 +130,6 @@ class PolicyModel(pomdp_py.RolloutPolicy):
                 if plane_x == 0:
                     motions.remove(MoveWest)  # TODO: correct?
 
-            #print(motions | self._other_actions)
             return motions | self._other_actions
 
     def probability(self, action, state, normalized=False, **kwargs):

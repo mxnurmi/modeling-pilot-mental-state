@@ -5,3 +5,5 @@ extra/
 __pycache__/
 animations/
 saved_agents/
+data/
+plots/
