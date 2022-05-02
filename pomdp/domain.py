@@ -41,7 +41,6 @@ MoveSouth = MoveAction(MoveAction.SOUTH, "SOUTH")
 
 # waiting also checks for wind
 
-
 class WaitAction(PlaneAction):
     def __init__(self):
         super().__init__("check-wind")

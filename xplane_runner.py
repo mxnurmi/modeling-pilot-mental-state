@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import pyqtgraph as pg
 
 from xplaneconnect import xpc
-from utils.stress_functions import stress_model
+from stress.attribute_stress import compute_attribute_stress
 
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
@@ -129,6 +129,8 @@ def monitor(plane_coordinates_x, plane_coordinates_y):
     last_update = start
     i = 1 # initialize x_axis_counter
 
+    # TODO: ADD THE AGENT!
+
     with xpc.XPlaneConnect() as client:
         while True:
             if (datetime.now() > last_update + timedelta(milliseconds = update_interval * 1000)):
@@ -162,7 +164,9 @@ def monitor(plane_coordinates_x, plane_coordinates_y):
                 # acf_max_FUELP max fuel pressure
                 # fuel_quantity
 
-                stress = stress_model("purely_wind_based", current_wind=current_wind)
+                # TODO: add stress computations
+                #stress = compute_attribute_stress(agent)
+                stress = 0
 
                 # boolean check to make sure we limit the plot size to window
                 if(len(x_axis_counters) > plot_array_max_length):

@@ -16,11 +16,15 @@ from visualizers.visual import get_coordinates
 
 from pomdp.models import *
 from pomdp.problem import PlaneProblem
+#from pomdp.domain import returner
+
+from datetime import datetime
 
 from stress import stress_estimator
 
 import numpy as np
 import pandas as pd
+
 np.warnings.filterwarnings('ignore', category=np.VisibleDeprecationWarning)
 
 # TODO:
@@ -76,16 +80,13 @@ def generate_init_belief(num_particles):
     return pomdp_py.Particles(particles)
 
 
-def print_status(frame, planner, plane_problem, action, env_reward, data_gathering_mode):
-    
-    if data_gathering_mode == True:
-        return
+def print_status(frame, planner, plane_problem, action, env_reward):
 
     true_state = copy.deepcopy(plane_problem.env.state)
 
     print("==== Step %d ====" % (frame+1))
     print("True state: %s" % true_state)
-    print("Belief: %s" % str(plane_problem.agent.cur_belief))
+    #print("Belief: %s" % str(plane_problem.agent.cur_belief))
     print("Action: %s" % str(action))
     print("Reward: %s" % str(env_reward))
     print("Total reward: " + str(total_reward))
@@ -121,10 +122,16 @@ def init_figure(coordinates, true_state):
 
 def pomdp_step(plane_problem, planner):
     action = planner.plan(plane_problem.agent)
+    action, _, _, _, _ = get_model_actions()
+    observation, _ = get_model_observations()
+
+    # If state transition is deterministic then we can use our own action
     env_reward = plane_problem.env.state_transition(
         action, execute=True)
+
     real_observation = plane_problem.env.provide_observation(
         plane_problem.agent.observation_model, action)
+
     plane_problem.agent.update_history(action, real_observation)
     planner.update(plane_problem.agent, action, real_observation)
     true_state = copy.deepcopy(plane_problem.env.state)
@@ -142,7 +149,9 @@ def process_data(attribute_stress_data, predict_control_stress_data, value_stres
 
     d = {'attribute_stress': attribute_stress_data, 'pred_control_stress': predict_control_stress_data, 'value_stress': value_stress_data, 'state_name': state_data, 'end_state': end_state_data}
     df = pd.DataFrame(d)
-    output_path = "./data/stress_data_" + scenario_name + ".csv"
+    dt_string = datetime.now().strftime("%d-%m")
+
+    output_path = "./data/stress_data_" + scenario_name + "__" + dt_string + ".csv"
     df.to_csv(output_path, mode='a', header=not os.path.exists(output_path))
 
 
@@ -191,8 +200,6 @@ def runner_data_gather(plane_problem, planner, scenario_name, write_data=True):
             frame_data.append(step)
 
 
-
-
     for i in range(50):
         complete = run_func(i)
         if complete:
@@ -206,7 +213,7 @@ def runner_data_gather(plane_problem, planner, scenario_name, write_data=True):
 
 
 
-def runner_a(plane_problem, planner, nsteps=20, size=None, save_animation=False, write_data=True, save_agent=False, data_gathering_mode=False):
+def runner_a(plane_problem, planner, nsteps=20, size=None, save_animation=False, save_agent=False):
     """
     Animates and runs the action-feedback loop of Plane problem POMDP
 
@@ -265,13 +272,8 @@ def runner_a(plane_problem, planner, nsteps=20, size=None, save_animation=False,
                 agent = plane_problem.agent
                 with open(f'saved_agents/agent.pickle', 'wb') as file:
                     pickle.dump(agent, file)
-
-            if data_gathering_mode == False:
-                time.sleep(20)
-
-            if write_data == True:
-                process_data(attribute_stress_data, predict_control_stress_data, value_stress_data, state_data, end_state=plane_problem.env.state.position)
-            exit() # annoyingly we have three possible exit points, where we have to process data
+                
+                exit() # annoyingly we have three possible exit points, where we have to process data
 
         # TODO: We should not use this?
         elif frame == nsteps-1:
@@ -280,11 +282,6 @@ def runner_a(plane_problem, planner, nsteps=20, size=None, save_animation=False,
                                + "\nFinal state:" + str(true_state)
                                + "\nTotal reward:" + str(total_reward)
                                )
-            
-            if data_gathering_mode == False:
-                time.sleep(20)
-            if write_data == True:
-                process_data(attribute_stress_data, predict_control_stress_data, value_stress_data, state_data, end_state=plane_problem.env.state.position)
             exit()
 
         else:
@@ -296,7 +293,7 @@ def runner_a(plane_problem, planner, nsteps=20, size=None, save_animation=False,
                     + "\n" + "Total reward: 0"
                     + "\n" + "State: " + str(true_state)
                     )
-                print_status(-1, planner, plane_problem, "-", "0", data_gathering_mode=data_gathering_mode)
+                print_status(-1, planner, plane_problem, "-", "0")
                 time.sleep(1)
 
             action, true_state, plane_location, env_reward = pomdp_step(
@@ -315,7 +312,7 @@ def runner_a(plane_problem, planner, nsteps=20, size=None, save_animation=False,
                                )
 
             ax2.set_title(f"Step {frame+1}", fontsize=20)
-            print_status(frame, planner, plane_problem, action, env_reward, data_gathering_mode=data_gathering_mode)
+            print_status(frame, planner, plane_problem, action, env_reward)
 
             # TODO: Change colormap upon plane crash?
             # if state = crashed, we should not compute stress?
@@ -332,40 +329,30 @@ def runner_a(plane_problem, planner, nsteps=20, size=None, save_animation=False,
             ax1.plot(frame_data, predict_control_stress_data, color="r", lw=4)
             return im
 
-    if data_gathering_mode == False:
-        anim = animation.FuncAnimation(
-            fig,
-            animate_func,
-            init_func=init_anim,
-            frames=nsteps,
-            interval=510,  # in ms
-            repeat=False
-        )
-    else:
-        anim = animation.FuncAnimation(
-            fig,
-            animate_func,
-            init_func=init_anim,
-            frames=nsteps,
-            interval=1,
-            repeat=False
-        )
 
+    anim = animation.FuncAnimation(
+        fig,
+        animate_func,
+        init_func=init_anim,
+        frames=nsteps,
+        interval=510,  # in ms
+        repeat=False
+    )
 
-    if save_animation or data_gathering_mode:
+    if save_animation:
         anim.save("animations/animation.gif",
                   dpi=300, writer=PillowWriter(fps=1))
     else:
         plt.show()
 
-    if write_data == True:
-        process_data(attribute_stress_data, predict_control_stress_data, value_stress_data, state_data, end_state=plane_problem.env.state.position)
+    #if write_data == True:
+    #    process_data(attribute_stress_data, predict_control_stress_data, value_stress_data, state_data, end_state=plane_problem.env.state.position)
     # load it
     # with open(f'test.pickle', 'rb') as file2:
     #cloned_agent = pickle.load(file2)
 
 # TODO: Create a function for gathering data that does not have func_anim
-def main(steps=15, save_animation=False, stress="value", save_agent=False, load_agent=False, scenario_number="one"):
+def main(steps=15, save_animation=False, stress="value", save_agent=False, load_agent=False, train_agent=False, scenario_number="one"):
 
     # TODO: Init scenario here
     # config.init_scenario(wind=0.90, fuel_keep_chance=1, n=6)  # this should be called in config?
@@ -393,22 +380,22 @@ def main(steps=15, save_animation=False, stress="value", save_agent=False, load_
             plane_problem.agent = pickle.load(file2)
 
     pomcp = pomdp_py.POMCP(max_depth=6, discount_factor=0.85,  # what does the discount_factor do?
-                           planning_time=-1, num_sims=10000, exploration_const=100,
+                           planning_time=-1, num_sims=config.NUM_SIMS, exploration_const=100,
                            rollout_policy=plane_problem.agent.policy_model,
                            show_progress=False, pbar_update_interval=1000)
 
-    for i in range(101):
-        print(f"\n --Loop {i}--")
-        runner_data_gather(plane_problem, pomcp, scenario_name=("scenario_"+scenario_number), write_data=True)
+    if train_agent == True:
+        for i in range(101):
+            print(f"\n --Loop {i}--")
+            runner_data_gather(plane_problem, pomcp, scenario_name=("scenario_"+scenario_number), write_data=True)
 
-        # reset
-        init_belief = generate_init_belief(50)
-        plane_problem.agent.set_belief(init_belief, prior=True)
-        plane_problem = PlaneProblem(n, k, init_true_state, init_belief)
-
-    #runner_a(plane_problem, planner=pomcp,
-            #nsteps=steps, size=(n, k), save_animation=save_animation, save_agent=save_agent, data_gathering_mode=True)
+            # reset
+            init_belief = generate_init_belief(50)
+            plane_problem.agent.set_belief(init_belief, prior=True)
+            plane_problem = PlaneProblem(n, k, init_true_state, init_belief)
+    else:
+        runner_a(plane_problem, planner=pomcp, nsteps=steps, size=(n, k), save_animation=save_animation, save_agent=save_agent)
 
 
 if __name__ == '__main__':
-    main(steps=100, save_animation=False, stress="attribute", save_agent=False, load_agent=False, scenario_number="two")
+    main(steps=100, save_animation=False, stress="attribute", save_agent=False, load_agent=False, train_agent=False, scenario_number="two")

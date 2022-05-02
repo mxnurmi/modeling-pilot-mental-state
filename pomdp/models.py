@@ -20,13 +20,10 @@ sys.path.insert(0, parentdir)
 
 import config
 
+# TODO: Particle reinvigoration function. 
+# Challenge: Authors (Silver, Veness 2010) count it as sim_amount/16.
+# We could achieve this with gloabl variable?
 class TransitionModel(pomdp_py.TransitionModel):
-
-    # TODO: We should add some kind of "compute distance" function that keeps track of plane coordinates and computes the distance
-    # So that agent only maintains that distance and no coordinates.
-    # Way to do this:
-    # Global coordinates variable that is only updated after an agent takes action?
-    # -> Problem: Now sampling doesn't work because we can't update sampling state
 
     def __init__(self, n, k):
         self._n = n
@@ -48,10 +45,25 @@ class TransitionModel(pomdp_py.TransitionModel):
             return PlaneState(config.LINKOPING_LOCATION, "takeoff", True, config.START_FUEL) 
 
         if state.position == "landed" or state.position == "crashed":
-            return PlaneState(config.LINKOPING_LOCATION, "pre-flight", True, config.START_FUEL)  # reset
+            # TODO: Which one of these is correct from the stress mdoeling perspective? Does resetting affect the complexity incorrectly etc.?
+            #return PlaneState(state.coordinates, state.position, state.wind, state.fuel) # final state
+            return PlaneState(config.LINKOPING_LOCATION, "pre-flight", True, config.START_FUEL)  # reset state
 
         if state.fuel < 1:
             return PlaneState(state.coordinates, "crashed", True, state.fuel)
+
+        ## Add n/16 random particles (n = num_of_sim)
+        particles = config.NUM_SIMS/16
+        particle_prob = particles/config.NUM_SIMS
+        add_particle = random.choices([True, False], weights=[
+                            particle_prob, 1-particle_prob], k=1)[0]
+
+        if add_particle == True:
+            plane_x = random.randint(0, self._n - 1)
+            plane_y = random.randint(0, self._k - 1)
+            random_coordinates = (plane_x, plane_y)
+            return PlaneState(random_coordinates, state.position, state.wind, state.fuel)
+
 
         # TODO: Wind should be estimated from previous wind?
         wind_state = random.choices([True, False], weights=[
@@ -68,7 +80,7 @@ class TransitionModel(pomdp_py.TransitionModel):
                 if state.position=="landing":
                     return PlaneState(state.coordinates, "landed", False, state.fuel)
                 elif state.position=="flying":
-                    return PlaneState(state.coordinates, "landing", wind_state, state.fuel-1)
+                    return PlaneState(state.coordinates, "landing", wind_state, state.fuel - 1)
             else:
                 return PlaneState(state.coordinates, state.position, wind_state, state.fuel - 2)
 
@@ -99,6 +111,11 @@ class TransitionModel(pomdp_py.TransitionModel):
         raise NotImplementedError
         return self.sample(state, action)
 
+def get_model_actions():
+    return MoveEast, MoveWest, MoveNorth, MoveSouth, LandAction()
+
+def get_model_observations():
+    return PlaneObservation(True), PlaneObservation(False) 
 
 class PolicyModel(pomdp_py.RolloutPolicy):
     def __init__(self, n, k):

@@ -16,15 +16,19 @@ EPSILON = 1e-3
 # - DO THIS:
 # - Correct amount of fuel becomes uncertain (NOTE: Increasing uncertainty should be linked to stress!)
 
+NUM_SIMS = 20000
 
 def run_scenario(number="one"):
     if number == "one":
+        """Simple condition (small domain and no uncertainty from changing conditions"""
         # easy scenario where plane has to land into other end of the map with plenty of fuel to spare
         init_scenario(wind=1, fuel_amount=11, fuel_keep_chance=1, n=7, airport1_coor=(2,2), airport2_coor=(4,5))
     elif number == "two":
-        init_scenario(wind=1, fuel_amount=18, fuel_keep_chance=1, n=9, airport1_coor=(2,3), airport2_coor=(7,8))
+        """Larger domain condition"""
+        init_scenario(wind=1, fuel_amount=22, fuel_keep_chance=1, n=9, airport1_coor=(2,3), airport2_coor=(7,7))
     elif number == "three":
-        init_scenario()
+        """Changing wind condition"""
+        init_scenario(wind=0.85, fuel_amount=11, fuel_keep_chance=1, n=7, airport1_coor=(2,2), airport2_coor=(4,5))
 
 
 def init_scenario(wind=None, fuel_amount=None, fuel_keep_chance=None, fuel_dumb_amount=None, n=None, airport1_coor=None, airport2_coor=None):
