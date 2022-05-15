@@ -144,13 +144,13 @@ def pomdp_step(plane_problem, planner):
 total_reward = 0
 
 
-def process_data(attribute_stress_data, predict_control_stress_data, value_stress_data, state_data, end_state, scenario_name):
+def process_data(stress_data_dict, scenario_name):
 
-    end_state_data = [end_state] * len(state_data)
+    #end_state_data = [end_state] * len(state_data)
 
-    d = {'attribute_stress': attribute_stress_data, 'pred_control_stress': predict_control_stress_data,
-         'value_stress': value_stress_data, 'state_name': state_data, 'end_state': end_state_data}
-    df = pd.DataFrame(d)
+    #d = {'attribute_stress': attribute_stress_data, 'pred_control_stress': predict_control_stress_data,
+    #     'value_stress': value_stress_data, 'state_name': state_data, 'end_state': end_state_data}
+    df = pd.DataFrame(stress_data_dict)
     dt_string = datetime.now().strftime("%d-%m")
 
     output_path = "./data/stress_data_" + scenario_name + "__" + dt_string + ".csv"
@@ -166,9 +166,12 @@ def runner_data_gather(plane_problem, planner, scenario_name, write_data=True):
         planner (Planner): a planner
     """
 
+    # TODO: Should probably have some class that maintains data so we don't need to do everything here??
     attribute_stress_data = [-1]
     predict_control_stress_data = [-1]
     value_stress_data = [-1]
+    pred_stress_data = [-1]
+    ctrl_stress_data = [-1]
 
     frame_data = [-1]
     state_data = ["preflight"]
@@ -181,32 +184,48 @@ def runner_data_gather(plane_problem, planner, scenario_name, write_data=True):
         # TODO: combine this with the one below?
         if plane_problem.env.state.position == "landed" or plane_problem.env.state.position == "crashed":
             # if write_data == True:
+            # TODO fix process_data if need be
             #process_data(attribute_stress_data, predict_control_stress_data, value_stress_data, state_data, end_state=plane_problem.env.state.position)
             return True
-
         else:
 
             # TODO: This misses the first state "takeoff" but that state does not have a tree yet so should we kip it anyway?
             _, _, _, _ = pomdp_step(
                 plane_problem, planner)
 
-            value_stress, attribute_stress, predict_control_stress = stress_estimator.compute_stress(
+            value_stress, attribute_stress, predict_control_stress, ctrl_stress, pred_stress = stress_estimator.compute_stress(
                 plane_problem.agent, num_sims=planner.last_num_sims)
 
             value_stress_data.append(value_stress)
             attribute_stress_data.append(attribute_stress)
             predict_control_stress_data.append(predict_control_stress)
+            pred_stress_data.append(pred_stress)
+            ctrl_stress_data.append(ctrl_stress)
             state_data.append(plane_problem.env.state.position)
             frame_data.append(step)
 
+    # Here range determines the max amount of steps for one round for agent 
+    # (needed in case it somehow gets stuck and doesnt crash)
     for i in range(50):
         complete = run_func(i)
         if complete:
             break
 
     if write_data == True:
-        process_data(attribute_stress_data, predict_control_stress_data, value_stress_data,
-                     state_data, end_state=plane_problem.env.state.position, scenario_name=scenario_name)
+        # TODO: we should submit a dict here instead so we can change what data is written dynamically
+        end_state=plane_problem.env.state.position
+        end_state_data = [end_state] * len(state_data)
+
+        d = {'attribute_stress': attribute_stress_data, 
+            'pred_control_stress': predict_control_stress_data,
+            'value_stress': value_stress_data,
+            'ctrl_stress': ctrl_stress_data,
+            'pred_stress': pred_stress_data,
+            'state_name': state_data,
+            'end_state': end_state
+            }
+
+        process_data(d, scenario_name=scenario_name)
     # load it
     # with open(f'test.pickle', 'rb') as file2:
     #cloned_agent = pickle.load(file2)
@@ -283,7 +302,6 @@ def runner_a(plane_problem, planner, size=None, save_animation=False, save_agent
             exit()
 
         else:
-
             if frame == 0:
                 true_state = copy.deepcopy(plane_problem.env.state)
                 plot_text.set_text("Action: -"
@@ -314,7 +332,7 @@ def runner_a(plane_problem, planner, size=None, save_animation=False, save_agent
 
             # TODO: Change colormap upon plane crash?
             # if state = crashed, we should not compute stress?
-            value_stress, attribute_stress, predict_control_stress = stress_estimator.compute_stress(
+            value_stress, attribute_stress, predict_control_stress, ctrl_stress, pred_stress  = stress_estimator.compute_stress(
                 plane_problem.agent, num_sims=planner.last_num_sims)
 
             value_stress_data.append(value_stress)
@@ -364,7 +382,7 @@ def init_plane_problem():
     return plane_problem
 
 
-def run(train_agent=False, loops=15, save_animation=False, stress="value", save_agent=False, load_agent=False, scenario_number="one"):
+def run(simulate_agent=False, loops=15, save_animation=False, stress="value", save_agent=False, load_agent=False, scenario_number="one"):
     config.run_scenario(scenario_number)
     # TODO: We should be able to init some standard scenarios!
     # And have one pickle loaded agent to fly those!
@@ -383,7 +401,7 @@ def run(train_agent=False, loops=15, save_animation=False, stress="value", save_
         with open(f'saved_agents/agent.pickle', 'rb') as file2:
             plane_problem.agent = pickle.load(file2)
 
-    if train_agent == True:
+    if simulate_agent == True:
         for i in range(loops):
             print(f"\n --Loop {i+1}--")
             runner_data_gather(plane_problem, pomcp, scenario_name=(
@@ -404,4 +422,4 @@ def run(train_agent=False, loops=15, save_animation=False, stress="value", save_
 
 
 if __name__ == '__main__':
-    run(train_agent=True, loops=2, save_animation=False, stress="attribute", scenario_number="one")
+    run(simulate_agent=True, loops=30, save_animation=False, stress="attribute", scenario_number="one")

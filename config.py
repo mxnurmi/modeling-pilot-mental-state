@@ -16,7 +16,7 @@ EPSILON = 1e-3
 # - DO THIS:
 # - Correct amount of fuel becomes uncertain (NOTE: Increasing uncertainty should be linked to stress!)
 
-NUM_SIMS = 20000
+NUM_SIMS = 40000
 
 def run_scenario(number="one"):
     if number == "one":
