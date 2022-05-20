@@ -1,5 +1,6 @@
 import random
 from math import dist
+from typing import Tuple
 
 EPSILON = 1e-3
 # START_FUEL = 20  # also max fuel
@@ -29,18 +30,25 @@ def run_scenario(number="one"):
     elif number == "three":
         """Changing wind condition"""
         init_scenario(wind=0.85, fuel_amount=11, fuel_keep_chance=1, n=7, airport1_coor=(2,2), airport2_coor=(4,5))
+    elif number == "four":
+        init_scenario(wind=1, fuel_amount=11, fuel_keep_chance=0.95, n=7, airport1_coor=(2,2), airport2_coor=(4,5))
+    elif number == "five":
+        init_scenario(wind=0.85, fuel_amount=11, fuel_keep_chance=0.95, n=7, airport1_coor=(2,2), airport2_coor=(4,5))
 
 
 def init_scenario(wind=None, fuel_amount=None, fuel_keep_chance=None, fuel_dumb_amount=None, n=None, airport1_coor=None, airport2_coor=None):
     # Maximum punishment
     global MAX_PUNISH
-    MAX_PUNISH = -10000
+    MAX_PUNISH = -1000
 
     # Map size
     if n == None:
         n = random.randint(4, 9)
     global SIZE
-    SIZE = (n, n)
+    if type(n) == Tuple:
+        SIZE = n
+    else:
+        SIZE = (n,n)
 
     # Start location coordinates
     global LINKOPING_LOCATION
@@ -94,3 +102,6 @@ def init_scenario(wind=None, fuel_amount=None, fuel_keep_chance=None, fuel_dumb_
     else:
         DUMB_AMOUNT = fuel_dumb_amount  # if one then the same as no drop
 
+
+# TODO: Hacky way to circumvent a bug:
+init_scenario(wind=1, fuel_amount=11, fuel_keep_chance=1, n=(21, 10), airport1_coor=(14,6), airport2_coor=(5,6))

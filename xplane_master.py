@@ -1,9 +1,13 @@
+import copy
+
 from datetime import datetime, timedelta
+from pyparsing import AtLineStart
 
 import pyqtgraph as pg
 
 from xplaneconnect import xpc
-from stress.attribute_stress import compute_attribute_stress
+
+from stress import stress_estimator
 
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
@@ -12,7 +16,13 @@ import numpy as np
 import shapely
 
 #import multiprocessing
-from multiprocessing import Process, Value, Manager
+from multiprocessing import Process, Value, Manager, Array
+
+from pomdp.models import *
+from pomdp.problem import PlaneProblem
+from stress import stress_estimator
+
+import config
 
 # TODO:
 # Wind level + Stress level
@@ -22,8 +32,12 @@ from multiprocessing import Process, Value, Manager
 
 # %%
 
+plane_in_grid = []
+airport1_in_grid = []
+airport2_in_grid = []
 
-def minimap(plane_coordinates_x, plane_coordinates_y, run):
+
+def minimap(plane_coordinates_x, plane_coordinates_y, run, plane_in_grid, airport1_in_grid, airport2_in_grid):
     full_map = gpd.read_file(
         "./visualizers/alla_valdistrikt/alla_valdistrikt.shp")
 
@@ -77,21 +91,28 @@ def minimap(plane_coordinates_x, plane_coordinates_y, run):
 
                 if (x_p > x1) and (x_p < x0) and (y_p > y0) and (y_p < y1):
                     plane_cells.append(shapely.geometry.box(x0, y0, x1, y1))
-                    plane_in_grid = (x_grid_number, y_grid_number)
-                    print("Plane:")
-                    print(plane_in_grid)
+
 
                 elif (x_ap1 > x1) and (x_ap1 < x0) and (y_ap1 > y0) and (y_ap1 < y1):
                     airport_cells.append(shapely.geometry.box(x0, y0, x1, y1))
-                    airport1_in_grid = (x_grid_number, y_grid_number)
-                    print("airport1 (Linköping):")
-                    print(airport1_in_grid)
+
 
                 elif (x_ap2 > x1) and (x_ap2 < x0) and (y_ap2 > y0) and (y_ap2 < y1):
                     airport_cells.append(shapely.geometry.box(x0, y0, x1, y1))
-                    airport2_in_grid = (x_grid_number, y_grid_number)
-                    print("airport2 (Malmen):")
-                    print(airport2_in_grid)
+
+
+                # TODO: Annoying double if structure (redundant) as elif needed above?
+                if (x_p > x1) and (x_p < x0) and (y_p > y0) and (y_p < y1):
+                    plane_in_grid[0] = x_grid_number
+                    plane_in_grid[1] = y_grid_number
+
+                if (x_ap1 > x1) and (x_ap1 < x0) and (y_ap1 > y0) and (y_ap1 < y1):
+                    airport1_in_grid[0] = x_grid_number
+                    airport1_in_grid[1] = y_grid_number
+
+                if (x_ap2 > x1) and (x_ap2 < x0) and (y_ap2 > y0) and (y_ap2 < y1):
+                    airport2_in_grid[0] = x_grid_number
+                    airport2_in_grid[1] = y_grid_number
 
         # TODO: IF airport 1 is under the agent it is not detected by the elif loop 
         # -> CHANGE ELIFS TO ELSE SO THAT IT ALWAYS GOES THROUGH THAT
@@ -122,9 +143,9 @@ def minimap(plane_coordinates_x, plane_coordinates_y, run):
     plt.show()
 
 
-def monitor(plane_coordinates_x, plane_coordinates_y, run):
+def monitor(plane_coordinates_x, plane_coordinates_y, run, plane_in_grid, airport1_in_grid, airport2_in_grid):
 
-    update_interval = 0.050  # seconds, 0.05 = 20 Hz
+    update_interval = 0.1  # seconds, originally 0.05 = 20 Hz
 
     app = pg.mkQApp("python xplane monitor")
 
@@ -152,6 +173,27 @@ def monitor(plane_coordinates_x, plane_coordinates_y, run):
     i = 1  # initialize x_axis_counter
 
     # TODO: ADD THE AGENT!
+    #####-----AGENT
+
+    plane_status = "takeoff"
+    init_true_state = PlaneState(
+        (plane_in_grid[0], plane_in_grid[1]), plane_status, True, 20)
+
+    init_belief = pomdp_py.Particles([init_true_state])
+
+    plane_problem = PlaneProblem(21, 10, init_true_state, init_belief)
+    plane_problem.agent.set_belief(init_belief, prior=True)
+
+    pomcp = pomdp_py.POMCP(max_depth=6, discount_factor=0.85,  # what does the discount_factor do?
+                        planning_time=0.5, num_sims=-1, exploration_const=100,
+                        rollout_policy=plane_problem.agent.policy_model,
+                        show_progress=False, pbar_update_interval=1000)
+
+    #####-----
+
+    last_stress_update = datetime.now()
+    stress = 0
+
 
     with xpc.XPlaneConnect() as client:
         try:
@@ -181,6 +223,8 @@ def monitor(plane_coordinates_x, plane_coordinates_y, run):
                     current_wind = all_winds[0][0]
 
                     fuel = client.getDREF("sim/cockpit2/fuel/fuel_quantity")
+                    altitude = client.getDREF("sim/cockpit/pressure/cabin_altitude_actual_m_msl")
+                    #print(altitude)
                     # fuel pressure per tank: sim/cockpit2/engine/indicators/fuel_pressure_psi
                     #print("fuel for each tank")
                     # print(fuel)
@@ -190,7 +234,48 @@ def monitor(plane_coordinates_x, plane_coordinates_y, run):
 
                     # TODO: add stress computations
                     #stress = compute_attribute_stress(agent)
-                    stress = 0
+
+                    action = pomcp.plan(plane_problem.agent)
+
+                    env_reward = plane_problem.env.state_transition(
+                    action, execute=False)
+
+                    real_observation = plane_problem.env.provide_observation(
+                        plane_problem.agent.observation_model, action)
+
+                    plane_problem.agent.update_history(action, real_observation)
+                    pomcp.update(plane_problem.agent, action, real_observation)
+                    agent_state = copy.deepcopy(plane_problem.env.state)
+
+                    #plane_location = true_state.coordinates
+
+                    value_stress, attribute_stress, predict_control_stress, ctrl_stress, pred_stress = stress_estimator.compute_stress(
+                        plane_problem.agent, num_sims=pomcp.last_num_sims)
+
+                    if altitude[0] > 400:
+                        plane_status = "flying"
+
+                    print(altitude)
+
+                    if (datetime.now() > last_stress_update + timedelta(milliseconds=update_interval * 18000)):
+                        last_stress_update = datetime.now()
+                        # only update stress every five seconds
+                        stress = predict_control_stress
+                        print(stress)
+
+
+                    # TODO: We should somehow handle landing vs takeoff
+
+                    init_true_state = PlaneState(
+                        (plane_in_grid[0], plane_in_grid[1]), plane_status, True, 20)
+
+                    init_belief = pomdp_py.Particles([init_true_state])
+
+                    plane_problem = PlaneProblem(21, 10, init_true_state, init_belief)
+                    plane_problem.agent.set_belief(init_belief, prior=True)
+
+                    #print("grid")
+                    #print("plane:", plane_in_grid[:], "linkoping:", airport1_in_grid[:], "malmen:", airport2_in_grid[:])
 
                     # boolean check to make sure we limit the plot size to window
                     if(len(x_axis_counters) > plot_array_max_length):
@@ -220,14 +305,20 @@ def run():
     plane_coordinates_x = Value('d', 15.670330652)
     plane_coordinates_y = Value('d', 58.40499838)
 
+    plane_in_grid = Array('i', [14, 6])
+    airport1_in_grid = Array('i', [14, 6])
+    airport2_in_grid = Array('i', [5, 6])
+
+    #config.init_scenario(wind=1, fuel_amount=11, fuel_keep_chance=1, n=(21, 10), airport1_coor=(14,6), airport2_coor=(5,6))
+
     manager = Manager()
     run = manager.Event()
     run.set()  # We should keep running.
 
     p1 = Process(target=minimap, args=(
-        plane_coordinates_x, plane_coordinates_y, run))
+        plane_coordinates_x, plane_coordinates_y, run, plane_in_grid, airport1_in_grid, airport2_in_grid))
     p2 = Process(target=monitor, args=(
-        plane_coordinates_x, plane_coordinates_y, run))
+        plane_coordinates_x, plane_coordinates_y, run, plane_in_grid, airport1_in_grid, airport2_in_grid))
 
     p1.start()
     p2.start()

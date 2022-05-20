@@ -216,7 +216,7 @@ def runner_data_gather(plane_problem, planner, scenario_name, write_data=True):
         end_state=plane_problem.env.state.position
         end_state_data = [end_state] * len(state_data)
 
-        d = {'attribute_stress': attribute_stress_data, 
+        d = {'heuristic_stress': attribute_stress_data, 
             'pred_control_stress': predict_control_stress_data,
             'value_stress': value_stress_data,
             'ctrl_stress': ctrl_stress_data,
@@ -422,4 +422,4 @@ def run(simulate_agent=False, loops=15, save_animation=False, stress="value", sa
 
 
 if __name__ == '__main__':
-    run(simulate_agent=True, loops=30, save_animation=False, stress="attribute", scenario_number="one")
+    run(simulate_agent=True, loops=10, save_animation=True, stress="attribute", scenario_number="five")

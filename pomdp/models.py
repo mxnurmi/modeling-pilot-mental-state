@@ -19,6 +19,7 @@ parentdir = os.path.dirname(currentdir)
 sys.path.insert(0, parentdir)
 
 import config
+#print(config)
 
 # TODO: Particle reinvigoration function. 
 # Challenge: Authors (Silver, Veness 2010) count it as sim_amount/16.
@@ -53,8 +54,11 @@ class TransitionModel(pomdp_py.TransitionModel):
             return PlaneState(state.coordinates, "crashed", True, state.fuel)
 
         ## Add n/16 random particles (n = num_of_sim)
+
+        #### ---- currently not in use ------
         particles = config.NUM_SIMS/16
         particle_prob = particles/config.NUM_SIMS
+        particle_prob = 0 # NOTE: override, TODO: make global variable
         add_particle = random.choices([True, False], weights=[
                             particle_prob, 1-particle_prob], k=1)[0]
 
@@ -63,22 +67,30 @@ class TransitionModel(pomdp_py.TransitionModel):
             plane_y = random.randint(0, self._k - 1)
             random_coordinates = (plane_x, plane_y)
             return PlaneState(random_coordinates, state.position, state.wind, state.fuel)
-
+        #### ---- currently not in use ------
 
         # TODO: Wind should be estimated from previous wind?
         wind_state = random.choices([True, False], weights=[
                                     config.WIND_PROB, 1-config.WIND_PROB], k=1)[0]
-
 
         fuel_state = random.choices([state.fuel - 1, state.fuel - config.DUMB_AMOUNT], weights=[
                                     config.FUEL_PROB, 1-config.FUEL_PROB], k=1)[0]
 
         if isinstance(action, LandAction):
             # TODO: We should make it so that wind always prevents landing but only turns on near one of the airports?
-            if ((state.coordinates == config.MALMEN_LOCATION) or (state.coordinates == config.LINKOPING_LOCATION and state.wind == False)):
-                # TODO: Add randomness from landing to landed stage
+            if ((state.coordinates == config.MALMEN_LOCATION and state.wind == True) or (state.coordinates == config.LINKOPING_LOCATION and state.wind == False)):
                 if state.position=="landing":
-                    return PlaneState(state.coordinates, "landed", False, state.fuel)
+                    successful_landing = random.choices([True, False], weights=[0.85, 0.15], k=1)[0] # TODO: add to config
+
+                    if successful_landing == True:
+                        return PlaneState(state.coordinates, "landed", False, state.fuel)
+                    else:
+                        crash_during_landing = random.choices([True, False], weights=[0.01, 0.99], k=1)[0] # TODO: add to config
+                        if crash_during_landing == False:
+                            return PlaneState(state.coordinates, "landing", wind_state, fuel_state)
+                        else:
+                            return PlaneState(state.coordinates, "crashed", True, state.fuel)
+
                 elif state.position=="flying":
                     return PlaneState(state.coordinates, "landing", wind_state, state.fuel - 1)
             else:
@@ -99,7 +111,11 @@ class TransitionModel(pomdp_py.TransitionModel):
                 if successfull_takeoff:
                     return PlaneState(new_coordinates, "flying", wind_state, fuel_state)
                 else:
-                    return PlaneState(state.coordinates, "takeoff", wind_state, fuel_state)
+                    crash_during_takeoff = random.choices([True, False], weights=[0.01, 0.99], k=1)[0] # TODO: add to config
+                    if crash_during_takeoff == False:
+                        return PlaneState(state.coordinates, "takeoff", wind_state, fuel_state)
+                    else:
+                        return PlaneState(state.coordinates, "crashed", True, state.fuel)
 
             return PlaneState(new_coordinates, state.position, wind_state, fuel_state)
 
@@ -187,12 +203,12 @@ class ObservationModel(pomdp_py.ObservationModel):
 
 class RewardModel(pomdp_py.RewardModel):
     def __init__(self):
-        self._max_punish = config.MAX_PUNISH #is this needed?
+        self._max_punish = -1000 #TODO: THIS SHOULD BE FROM CONFIG #is this needed?
 
     # TODO: make sure we reward if landed is next state
     def _reward_func(self, state, action):
         if state.position == "landed": #TODO: Enough time to give reward?
-            return 1000
+            return 100
         elif state.position == "crashed":
             return self._max_punish
         #elif isinstance(action, WaitAction):  # Small punishment for waiting

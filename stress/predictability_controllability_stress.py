@@ -92,9 +92,14 @@ def compute_pred_ctrl_stress(agent, dd, num_sims):
 
     #print("rewards/actions")
     #print(dd.nq / dd.nv)
-    # TODO: Check which value goes over 1 here!
+    # TODO: Check which value goes over 1 here! -> done?
+
+    # we should multiply this with value so that it lowers the value if negative and increases if positive
 
     pred_ctrl_stress = ( norm_complexity + (2 * norm_entropy) ) / 3
+
+    # TODO: How to add value into this function?
+    # negative value should amplify, should we just use min() to ensure that the end result is below 1?
 
     #print("complexity")
     #print(norm_complexity)
