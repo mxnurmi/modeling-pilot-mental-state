@@ -24,15 +24,15 @@ def run_scenario(number="one"):
         """Simple condition (small domain and no uncertainty from changing conditions"""
         # easy scenario where plane has to land into other end of the map with plenty of fuel to spare
         init_scenario(wind=1, fuel_amount=11, fuel_keep_chance=1, n=7, airport1_coor=(2,2), airport2_coor=(4,5))
-    elif number == "two":
+    elif number == "LARGE":
         """Larger domain condition"""
         init_scenario(wind=1, fuel_amount=22, fuel_keep_chance=1, n=9, airport1_coor=(2,3), airport2_coor=(7,7))
-    elif number == "three":
+    elif number == "two":
         """Changing wind condition"""
         init_scenario(wind=0.85, fuel_amount=11, fuel_keep_chance=1, n=7, airport1_coor=(2,2), airport2_coor=(4,5))
-    elif number == "four":
+    elif number == "three":
         init_scenario(wind=1, fuel_amount=11, fuel_keep_chance=0.95, n=7, airport1_coor=(2,2), airport2_coor=(4,5))
-    elif number == "five":
+    elif number == "four":
         init_scenario(wind=0.85, fuel_amount=11, fuel_keep_chance=0.95, n=7, airport1_coor=(2,2), airport2_coor=(4,5))
 
 
@@ -103,5 +103,6 @@ def init_scenario(wind=None, fuel_amount=None, fuel_keep_chance=None, fuel_dumb_
         DUMB_AMOUNT = fuel_dumb_amount  # if one then the same as no drop
 
 
-# TODO: Hacky way to circumvent a bug:
+# TODO: Hacky way to circumvent a the fact that xplane_master.py has difficulties initiating config FIX!:
+print("CONFIG FILE HAS A SETUP RUNNING, UNCOMMENT IF NEEDED")
 init_scenario(wind=1, fuel_amount=11, fuel_keep_chance=1, n=(21, 10), airport1_coor=(14,6), airport2_coor=(5,6))

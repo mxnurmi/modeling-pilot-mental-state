@@ -19,7 +19,7 @@ In the second case we can do the same, but instead of opening a seprate window, 
 
 And in the third scenario we can generate a datafile that contains the results of agent running predetermined amount of times with the various stress states saved. Each run starts with the agent's state reset. This is useful if we want to evaluate how stress behaves over multiple runs:
 
-`run(simulate_agent=True, loops=40, stress="attribute", scenario_number="five")`
+`run(simulate_agent=True, loops=40, scenario_number="five")`
 
 Note that even 100 loops can take a considerable amount of time on a basic computer as the agent will run about 40000 simulations at each step, which each loop will have multiple of.
 

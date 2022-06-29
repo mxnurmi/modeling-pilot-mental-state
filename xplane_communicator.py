@@ -1,7 +1,6 @@
 import copy
 
 from datetime import datetime, timedelta
-from pyparsing import AtLineStart
 
 import pyqtgraph as pg
 
@@ -92,14 +91,11 @@ def minimap(plane_coordinates_x, plane_coordinates_y, run, plane_in_grid, airpor
                 if (x_p > x1) and (x_p < x0) and (y_p > y0) and (y_p < y1):
                     plane_cells.append(shapely.geometry.box(x0, y0, x1, y1))
 
-
                 elif (x_ap1 > x1) and (x_ap1 < x0) and (y_ap1 > y0) and (y_ap1 < y1):
                     airport_cells.append(shapely.geometry.box(x0, y0, x1, y1))
 
-
                 elif (x_ap2 > x1) and (x_ap2 < x0) and (y_ap2 > y0) and (y_ap2 < y1):
                     airport_cells.append(shapely.geometry.box(x0, y0, x1, y1))
-
 
                 # TODO: Annoying double if structure (redundant) as elif needed above?
                 if (x_p > x1) and (x_p < x0) and (y_p > y0) and (y_p < y1):
@@ -114,7 +110,7 @@ def minimap(plane_coordinates_x, plane_coordinates_y, run, plane_in_grid, airpor
                     airport2_in_grid[0] = x_grid_number
                     airport2_in_grid[1] = y_grid_number
 
-        # TODO: IF airport 1 is under the agent it is not detected by the elif loop 
+        # TODO: IF airport 1 is under the agent it is not detected by the elif loop
         # -> CHANGE ELIFS TO ELSE SO THAT IT ALWAYS GOES THROUGH THAT
         return grid_cells, airport_cells, plane_cells
 
@@ -142,8 +138,8 @@ def minimap(plane_coordinates_x, plane_coordinates_y, run, plane_in_grid, airpor
     ani = animation.FuncAnimation(fig, animate, interval=1000)
     plt.show()
 
-
-def monitor(plane_coordinates_x, plane_coordinates_y, run, plane_in_grid, airport1_in_grid, airport2_in_grid):
+# TODO: What are the airport_grids used for??
+def monitor(plane_coordinates_x, plane_coordinates_y, run, plane_in_grid, plot_wind=True):
 
     update_interval = 0.1  # seconds, originally 0.05 = 20 Hz
 
@@ -153,8 +149,9 @@ def monitor(plane_coordinates_x, plane_coordinates_y, run, plane_in_grid, airpor
     win.resize(500, 300)  # pixels
     win.setWindowTitle("XPlane system monitor")
 
-    p1 = win.addPlot(title="wind", row=0, col=0)
-    p1.showGrid(y=True)
+    if plot_wind:
+        p1 = win.addPlot(title="wind", row=0, col=0)
+        p1.showGrid(y=True)
 
     p2 = win.addPlot(title="stress", row=0, col=1)
     p2.showGrid(y=True)
@@ -173,11 +170,12 @@ def monitor(plane_coordinates_x, plane_coordinates_y, run, plane_in_grid, airpor
     i = 1  # initialize x_axis_counter
 
     # TODO: ADD THE AGENT!
-    #####-----AGENT
+    # -----AGENT
 
     plane_status = "takeoff"
+    wind_status = True
     init_true_state = PlaneState(
-        (plane_in_grid[0], plane_in_grid[1]), plane_status, True, 20)
+        (plane_in_grid[0], plane_in_grid[1]), plane_status, wind_status, 20)
 
     init_belief = pomdp_py.Particles([init_true_state])
 
@@ -185,15 +183,14 @@ def monitor(plane_coordinates_x, plane_coordinates_y, run, plane_in_grid, airpor
     plane_problem.agent.set_belief(init_belief, prior=True)
 
     pomcp = pomdp_py.POMCP(max_depth=6, discount_factor=0.85,  # what does the discount_factor do?
-                        planning_time=0.5, num_sims=-1, exploration_const=100,
-                        rollout_policy=plane_problem.agent.policy_model,
-                        show_progress=False, pbar_update_interval=1000)
+                           planning_time=0.5, num_sims=-1, exploration_const=100,
+                           rollout_policy=plane_problem.agent.policy_model,
+                           show_progress=False, pbar_update_interval=1000)
 
-    #####-----
+    # -----
 
     last_stress_update = datetime.now()
     stress = 0
-
 
     with xpc.XPlaneConnect() as client:
         try:
@@ -214,6 +211,13 @@ def monitor(plane_coordinates_x, plane_coordinates_y, run, plane_in_grid, airpor
                     #dref = "sim/weather/wind_speed_kt[1]"
                     #client.sendDREF(dref, values)
 
+                    # the height of the wind: wind_altitude_msl_m[0]
+                    # the speed of the wind: wind_speed_kt[0]
+                    # the direction of the wind: wind_direction_degt[0]
+
+                    # TODO: add wind simulator and something that controls wind to system
+                    # add fuel measurement
+
                     lat = posi[0]
                     longi = posi[1]
                     plane_coordinates_x.value = lat
@@ -223,11 +227,13 @@ def monitor(plane_coordinates_x, plane_coordinates_y, run, plane_in_grid, airpor
                     current_wind = all_winds[0][0]
 
                     fuel = client.getDREF("sim/cockpit2/fuel/fuel_quantity")
-                    altitude = client.getDREF("sim/cockpit/pressure/cabin_altitude_actual_m_msl")
-                    #print(altitude)
+                    altitude = client.getDREF(
+                        "sim/cockpit/pressure/cabin_altitude_actual_m_msl")
+                    # print(altitude)
                     # fuel pressure per tank: sim/cockpit2/engine/indicators/fuel_pressure_psi
                     #print("fuel for each tank")
-                    # print(fuel)
+                    #print(fuel)
+                    #print(current_wind)
 
                     # acf_max_FUELP max fuel pressure
                     # fuel_quantity
@@ -238,12 +244,13 @@ def monitor(plane_coordinates_x, plane_coordinates_y, run, plane_in_grid, airpor
                     action = pomcp.plan(plane_problem.agent)
 
                     env_reward = plane_problem.env.state_transition(
-                    action, execute=False)
+                        action, execute=False)
 
                     real_observation = plane_problem.env.provide_observation(
                         plane_problem.agent.observation_model, action)
 
-                    plane_problem.agent.update_history(action, real_observation)
+                    plane_problem.agent.update_history(
+                        action, real_observation)
                     pomcp.update(plane_problem.agent, action, real_observation)
                     agent_state = copy.deepcopy(plane_problem.env.state)
 
@@ -252,29 +259,46 @@ def monitor(plane_coordinates_x, plane_coordinates_y, run, plane_in_grid, airpor
                     value_stress, attribute_stress, predict_control_stress, ctrl_stress, pred_stress = stress_estimator.compute_stress(
                         plane_problem.agent, num_sims=pomcp.last_num_sims)
 
+                    #fuel = client.sendDREF("sim/cockpit2/fuel/fuel_quantity", values=[(0.0,0.0,0,0,0,0,0,0,0)]) -> doesnt work
+
+
                     if altitude[0] > 400:
                         plane_status = "flying"
 
-                    print(altitude)
+                    wind_noise = random.uniform(-3.0, 3.0)
+
+                    if altitude[0] > 1000:
+                        set_drefs = ["sim/weather/wind_speed_kt[0]", "sim/weather/wind_direction_degt[0]", "wind_altitude_msl_m[0]"]
+                        wind_speed = max(0, 0 + wind_noise)
+                        values = [wind_speed, 100, 500]
+                        client.sendDREFs(set_drefs, values)
+                        wind_status = False
+                    #else:
+                        #set_drefs = ["sim/weather/wind_speed_kt[0]", "sim/weather/wind_direction_degt[0]", "wind_altitude_msl_m[0]"]
+                        #wind_speed = 30 + wind_noise
+                        #values = [wind_speed, 100, 300]
+                        #client.sendDREFs(set_drefs, values)
+
+                    #print(altitude)
 
                     if (datetime.now() > last_stress_update + timedelta(milliseconds=update_interval * 18000)):
                         last_stress_update = datetime.now()
                         # only update stress every five seconds
                         stress = predict_control_stress
-                        print(stress)
-
+                        #print(stress)
 
                     # TODO: We should somehow handle landing vs takeoff
 
                     init_true_state = PlaneState(
-                        (plane_in_grid[0], plane_in_grid[1]), plane_status, True, 20)
+                        (plane_in_grid[0], plane_in_grid[1]), plane_status, wind_status, 20)
 
                     init_belief = pomdp_py.Particles([init_true_state])
 
-                    plane_problem = PlaneProblem(21, 10, init_true_state, init_belief)
+                    plane_problem = PlaneProblem(
+                        21, 10, init_true_state, init_belief)
                     plane_problem.agent.set_belief(init_belief, prior=True)
 
-                    #print("grid")
+                    # print("grid")
                     #print("plane:", plane_in_grid[:], "linkoping:", airport1_in_grid[:], "malmen:", airport2_in_grid[:])
 
                     # boolean check to make sure we limit the plot size to window
@@ -293,7 +317,8 @@ def monitor(plane_coordinates_x, plane_coordinates_y, run, plane_in_grid, airpor
                         stress_history.append(stress)
                     i = i + 1
 
-                    p1.plot(x_axis_counters, wind_history, pen=0, clear=True)
+                    if plot_wind:
+                        p1.plot(x_axis_counters, wind_history, pen=0, clear=True)
                     p2.plot(x_axis_counters, stress_history, pen=0, clear=True)
 
         except Exception as e:
@@ -308,6 +333,7 @@ def run():
     plane_in_grid = Array('i', [14, 6])
     airport1_in_grid = Array('i', [14, 6])
     airport2_in_grid = Array('i', [5, 6])
+    plot_wind = True
 
     #config.init_scenario(wind=1, fuel_amount=11, fuel_keep_chance=1, n=(21, 10), airport1_coor=(14,6), airport2_coor=(5,6))
 
@@ -318,7 +344,7 @@ def run():
     p1 = Process(target=minimap, args=(
         plane_coordinates_x, plane_coordinates_y, run, plane_in_grid, airport1_in_grid, airport2_in_grid))
     p2 = Process(target=monitor, args=(
-        plane_coordinates_x, plane_coordinates_y, run, plane_in_grid, airport1_in_grid, airport2_in_grid))
+        plane_coordinates_x, plane_coordinates_y, run, plane_in_grid, plot_wind))
 
     p1.start()
     p2.start()
@@ -329,7 +355,6 @@ def run():
 
 if __name__ == "__main__":
     run()
-
 
 # %%
 

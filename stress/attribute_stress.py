@@ -15,6 +15,9 @@ def normalize_value(x, min_value, max_value):
     return ((x - min_value) / (max_value - min_value))
 
 
+# NOTE: attribute stress is same as heuristic
+# TODO: fix names!
+
 def compute_attribute_stress(agent):
 
     belief = agent.cur_belief.mpe()

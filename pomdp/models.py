@@ -55,7 +55,7 @@ class TransitionModel(pomdp_py.TransitionModel):
 
         ## Add n/16 random particles (n = num_of_sim)
 
-        #### ---- currently not in use ------
+        #### ----\/ currently not in use \/ ------
         particles = config.NUM_SIMS/16
         particle_prob = particles/config.NUM_SIMS
         particle_prob = 0 # NOTE: override, TODO: make global variable
@@ -67,7 +67,7 @@ class TransitionModel(pomdp_py.TransitionModel):
             plane_y = random.randint(0, self._k - 1)
             random_coordinates = (plane_x, plane_y)
             return PlaneState(random_coordinates, state.position, state.wind, state.fuel)
-        #### ---- currently not in use ------
+        #### ----  ^^^ currently not in use ^^^ ------
 
         # TODO: Wind should be estimated from previous wind?
         wind_state = random.choices([True, False], weights=[

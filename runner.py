@@ -152,6 +152,7 @@ def process_data(stress_data_dict, scenario_name):
     #     'value_stress': value_stress_data, 'state_name': state_data, 'end_state': end_state_data}
     df = pd.DataFrame(stress_data_dict)
     dt_string = datetime.now().strftime("%d-%m")
+    dt_string = ""
 
     output_path = "./data/stress_data_" + scenario_name + "__" + dt_string + ".csv"
     df.to_csv(output_path, mode='a', header=not os.path.exists(output_path))
@@ -382,7 +383,7 @@ def init_plane_problem():
     return plane_problem
 
 
-def run(simulate_agent=False, loops=15, save_animation=False, stress="value", save_agent=False, load_agent=False, scenario_number="one"):
+def run(simulate_agent=False, loops=15, save_animation=False, save_agent=False, load_agent=False, scenario_number="one"):
     config.run_scenario(scenario_number)
     # TODO: We should be able to init some standard scenarios!
     # And have one pickle loaded agent to fly those!
@@ -407,10 +408,7 @@ def run(simulate_agent=False, loops=15, save_animation=False, stress="value", sa
             runner_data_gather(plane_problem, pomcp, scenario_name=(
                 "scenario_"+scenario_number), write_data=True)
 
-            # reset
-            #init_belief = generate_init_belief(50)
-            #plane_problem.agent.set_belief(init_belief, prior=True)
-            #plane_problem = PlaneProblem(n, k, init_true_state, init_belief)
+            # Reset
             plane_problem = init_plane_problem()
 
     else:
@@ -422,4 +420,15 @@ def run(simulate_agent=False, loops=15, save_animation=False, stress="value", sa
 
 
 if __name__ == '__main__':
-    run(simulate_agent=True, loops=10, save_animation=True, stress="attribute", scenario_number="five")
+    #run(simulate_agent=True, loops=80, save_animation=False, stress="attribute", scenario_number="one")
+
+    # SIMULATE ALL OF THE THESIS DATA
+    print("SIMULATION STARTING")
+    run(simulate_agent=True, loops=100, scenario_number="one") #simple
+    print("1/4 DONE")
+    run(simulate_agent=True, loops=100, scenario_number="two") #wind
+    print("2/4 DONE")
+    run(simulate_agent=True, loops=100, scenario_number="three") #fuel
+    print("3/4 DONE")
+    run(simulate_agent=True, loops=100, scenario_number="four") #wind and fuel
+    print("4/4 DONE")
