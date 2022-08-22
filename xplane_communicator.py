@@ -14,6 +14,8 @@ import geopandas as gpd
 import numpy as np
 import shapely
 
+import pomdp_py
+
 #import multiprocessing
 from multiprocessing import Process, Value, Manager, Array
 
@@ -28,6 +30,8 @@ import config
 
 # TODO next:
 # Fly and check that everything maps
+
+# FIX THE CONFIG FILE THING!
 
 # %%
 
@@ -138,8 +142,19 @@ def minimap(plane_coordinates_x, plane_coordinates_y, run, plane_in_grid, airpor
     ani = animation.FuncAnimation(fig, animate, interval=1000)
     plt.show()
 
-# TODO: What are the airport_grids used for??
+
+# TODO: We should make this so that instead of running agent directly, agent is ran on csv data and this is only used to gather all the parameters
 def monitor(plane_coordinates_x, plane_coordinates_y, run, plane_in_grid, plot_wind=True):
+    """
+    params
+    ======
+        plane_coordinates_x: Tracks the planes real x-axis coordinates. Used to communicate them to minimap()
+        plane_coordinates_y: Tracks the planes real y-axis coordinates. Used to communicate them to minimap()
+        run: multiprocessing manager
+        plane_in_grid: Location of plane mapped to grid coordinates
+        plot_wind: Whether we plot separate window for wind
+    
+    """
 
     update_interval = 0.1  # seconds, originally 0.05 = 20 Hz
 
@@ -169,8 +184,7 @@ def monitor(plane_coordinates_x, plane_coordinates_y, run, plane_in_grid, plot_w
     last_update = start
     i = 1  # initialize x_axis_counter
 
-    # TODO: ADD THE AGENT!
-    # -----AGENT
+    # ----- AGENT initialization ------
 
     plane_status = "takeoff"
     wind_status = True
@@ -187,7 +201,7 @@ def monitor(plane_coordinates_x, plane_coordinates_y, run, plane_in_grid, plot_w
                            rollout_policy=plane_problem.agent.policy_model,
                            show_progress=False, pbar_update_interval=1000)
 
-    # -----
+    # ----- ----- ------
 
     last_stress_update = datetime.now()
     stress = 0
@@ -229,38 +243,30 @@ def monitor(plane_coordinates_x, plane_coordinates_y, run, plane_in_grid, plot_w
                     fuel = client.getDREF("sim/cockpit2/fuel/fuel_quantity")
                     altitude = client.getDREF(
                         "sim/cockpit/pressure/cabin_altitude_actual_m_msl")
-                    # print(altitude)
                     # fuel pressure per tank: sim/cockpit2/engine/indicators/fuel_pressure_psi
-                    #print("fuel for each tank")
-                    #print(fuel)
-                    #print(current_wind)
-
                     # acf_max_FUELP max fuel pressure
                     # fuel_quantity
 
-                    # TODO: add stress computations
-                    #stress = compute_attribute_stress(agent)
-
+                    # Stress computations
                     action = pomcp.plan(plane_problem.agent)
 
                     env_reward = plane_problem.env.state_transition(
                         action, execute=False)
+                        # TODO: we should only execute when we truly move to next state
 
+                    # TODO: Is this correct though?
                     real_observation = plane_problem.env.provide_observation(
                         plane_problem.agent.observation_model, action)
-
-                    plane_problem.agent.update_history(
+                    # TODO: history should only be updated when we move to next state and the actiuon should be pilot controlled not the one from agent!
+                    plane_problem.agent.update_history( 
                         action, real_observation)
                     pomcp.update(plane_problem.agent, action, real_observation)
                     agent_state = copy.deepcopy(plane_problem.env.state)
 
-                    #plane_location = true_state.coordinates
-
                     value_stress, attribute_stress, predict_control_stress, ctrl_stress, pred_stress = stress_estimator.compute_stress(
-                        plane_problem.agent, num_sims=pomcp.last_num_sims)
+                        plane_problem.agent, num_sims=pomcp.last_num_sims) # TODO: Maybe return dict instead?
 
                     #fuel = client.sendDREF("sim/cockpit2/fuel/fuel_quantity", values=[(0.0,0.0,0,0,0,0,0,0,0)]) -> doesnt work
-
 
                     if altitude[0] > 400:
                         plane_status = "flying"
@@ -279,16 +285,14 @@ def monitor(plane_coordinates_x, plane_coordinates_y, run, plane_in_grid, plot_w
                         #values = [wind_speed, 100, 300]
                         #client.sendDREFs(set_drefs, values)
 
-                    #print(altitude)
-
+                    # only update stress every five seconds
                     if (datetime.now() > last_stress_update + timedelta(milliseconds=update_interval * 18000)):
                         last_stress_update = datetime.now()
-                        # only update stress every five seconds
                         stress = predict_control_stress
-                        #print(stress)
 
                     # TODO: We should somehow handle landing vs takeoff
 
+                    # TODO: We should only reset when the state does not change and even then the history should be maintained
                     init_true_state = PlaneState(
                         (plane_in_grid[0], plane_in_grid[1]), plane_status, wind_status, 20)
 
@@ -310,7 +314,6 @@ def monitor(plane_coordinates_x, plane_coordinates_y, run, plane_in_grid, plot_w
                         x_axis_counters.append(i)
                         wind_history.append(current_wind)
                         stress_history.append(stress)
-
                     else:
                         x_axis_counters.append(i)
                         wind_history.append(current_wind)
@@ -326,7 +329,7 @@ def monitor(plane_coordinates_x, plane_coordinates_y, run, plane_in_grid, plot_w
             raise
 
 
-def run():
+def run_simulator_tools():
     plane_coordinates_x = Value('d', 15.670330652)
     plane_coordinates_y = Value('d', 58.40499838)
 
@@ -345,6 +348,7 @@ def run():
         plane_coordinates_x, plane_coordinates_y, run, plane_in_grid, airport1_in_grid, airport2_in_grid))
     p2 = Process(target=monitor, args=(
         plane_coordinates_x, plane_coordinates_y, run, plane_in_grid, plot_wind))
+    # TODO: One of the args should be the agent
 
     p1.start()
     p2.start()
@@ -354,9 +358,7 @@ def run():
 
 
 if __name__ == "__main__":
-    run()
-
-# %%
+    run_simulator_tools()
 
 
 # %%

@@ -20,6 +20,7 @@ EPSILON = 1e-3
 NUM_SIMS = 40000
 
 def run_scenario(number="one"):
+    print(f"Running scenario number {number}")
     if number == "one":
         """Simple condition (small domain and no uncertainty from changing conditions"""
         # easy scenario where plane has to land into other end of the map with plenty of fuel to spare
@@ -104,5 +105,5 @@ def init_scenario(wind=None, fuel_amount=None, fuel_keep_chance=None, fuel_dumb_
 
 
 # TODO: Hacky way to circumvent a the fact that xplane_master.py has difficulties initiating config FIX!:
-print("CONFIG FILE HAS A SETUP RUNNING, UNCOMMENT IF NEEDED")
-init_scenario(wind=1, fuel_amount=11, fuel_keep_chance=1, n=(21, 10), airport1_coor=(14,6), airport2_coor=(5,6))
+#print("CONFIG FILE HAS A SETUP RUNNING, UNCOMMENT IF NEEDED")
+#init_scenario(wind=1, fuel_amount=11, fuel_keep_chance=1, n=(21, 10), airport1_coor=(14,6), airport2_coor=(5,6))

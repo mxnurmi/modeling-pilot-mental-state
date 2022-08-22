@@ -31,10 +31,6 @@ class TransitionModel(pomdp_py.TransitionModel):
         self._k = k
 
     def probability(self, next_state, state, action):
-        # TODO: we should have transition between differing wind states
-        # In the tiger example there are always two states and opening a door will corrspond
-        # to (state, action, next_state) which is 0.5 always as long as action is opening
-        # In this transitionmodel we can just explicitly give out all of the probabilities instead
 
         if next_state != self.sample(state, action):
             return config.EPSILON
@@ -174,15 +170,15 @@ class PolicyModel(pomdp_py.RolloutPolicy):
 
 
 class ObservationModel(pomdp_py.ObservationModel):
-    def __init__(self, noise=0):
+    def __init__(self, noise=0.3):
         self.noise = noise
 
     def probability(self, observation, next_state, action):
         if isinstance(action, MoveAction) and (next_state.position != "landed") and (next_state.position != "crashed"): #Changed WaitAction to move
             if observation.wind == next_state.wind:
-                return 1.0 - self.noise  # correct wind
+                return 1.0 - self.noise  # prob of getting correct wind
             else:
-                return self.noise  # incorrect wind
+                return self.noise  # p of incorrect wind
         else:
             if observation.wind is None:
                 return 1.0 - config.EPSILON  # expected to receive no observation

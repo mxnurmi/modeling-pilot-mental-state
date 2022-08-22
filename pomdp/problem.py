@@ -18,7 +18,7 @@ class PlaneProblem(pomdp_py.POMDP):
                                TransitionModel(n, k),
                                ObservationModel(),
                                RewardModel())
-        env = pomdp_py.Environment(init_true_state,  # these as well
+        env = pomdp_py.Environment(init_true_state, 
                                    TransitionModel(n, k),
                                    RewardModel())
         super().__init__(agent, env, name="PlaneProblem")

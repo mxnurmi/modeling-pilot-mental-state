@@ -16,6 +16,8 @@ from visualizers.visual import get_coordinates
 
 from pomdp.models import *
 from pomdp.problem import PlaneProblem
+
+from pomdp.rl_agent import RLAgentWrapper as RLAgent
 #from pomdp.domain import returner
 
 from datetime import datetime
@@ -158,7 +160,7 @@ def process_data(stress_data_dict, scenario_name):
     df.to_csv(output_path, mode='a', header=not os.path.exists(output_path))
 
 
-def runner_data_gather(plane_problem, planner, scenario_name, write_data=True):
+def runner_data_gather(FIX_plane_problem, FIX_planner, rl_agent, scenario_name, write_data=True):
     """
     Animates and runs the action-feedback loop of Plane problem POMDP
 
@@ -181,28 +183,31 @@ def runner_data_gather(plane_problem, planner, scenario_name, write_data=True):
         global total_reward  # hacky way to update total_reward
 
         # print(plane_problem.env.state.position)
+        agent_position = rl_agent.return_plane_position()
 
         # TODO: combine this with the one below?
-        if plane_problem.env.state.position == "landed" or plane_problem.env.state.position == "crashed":
+        if agent_position == "landed" or agent_position == "crashed":
             # if write_data == True:
             # TODO fix process_data if need be
             #process_data(attribute_stress_data, predict_control_stress_data, value_stress_data, state_data, end_state=plane_problem.env.state.position)
             return True
         else:
 
-            # TODO: This misses the first state "takeoff" but that state does not have a tree yet so should we kip it anyway?
-            _, _, _, _ = pomdp_step(
-                plane_problem, planner)
-
-            value_stress, attribute_stress, predict_control_stress, ctrl_stress, pred_stress = stress_estimator.compute_stress(
-                plane_problem.agent, num_sims=planner.last_num_sims)
+            # TODO: This misses the first state "takeoff" but that state does not have a tree yet so should we skip it anyway?
+            #_, _, _, _ = pomdp_step(
+            #    plane_problem, planner)
+            rl_agent.find_new_state_no_ext_params()
+            #problem_agent = rl_agent.return_agent()
+            #planner_num_of_sims = rl_agent.return_num_of_planning_sims()
+            # TODO: THIS SHOULD RETURN DICT
+            value_stress, attribute_stress, predict_control_stress, ctrl_stress, pred_stress = rl_agent.compute_stress(stress_estimator)
 
             value_stress_data.append(value_stress)
             attribute_stress_data.append(attribute_stress)
             predict_control_stress_data.append(predict_control_stress)
             pred_stress_data.append(pred_stress)
             ctrl_stress_data.append(ctrl_stress)
-            state_data.append(plane_problem.env.state.position)
+            state_data.append(agent_position)
             frame_data.append(step)
 
     # Here range determines the max amount of steps for one round for agent 
@@ -214,7 +219,7 @@ def runner_data_gather(plane_problem, planner, scenario_name, write_data=True):
 
     if write_data == True:
         # TODO: we should submit a dict here instead so we can change what data is written dynamically
-        end_state=plane_problem.env.state.position
+        end_state=rl_agent.return_plane_position()
         end_state_data = [end_state] * len(state_data)
 
         d = {'heuristic_stress': attribute_stress_data, 
@@ -232,14 +237,17 @@ def runner_data_gather(plane_problem, planner, scenario_name, write_data=True):
     #cloned_agent = pickle.load(file2)
 
 
-def runner_a(plane_problem, planner, size=None, save_animation=False, save_agent=False):
+def runner_a(rl_agent, size=None, save_animation=False, save_agent=False):
     """
     Animates and runs the action-feedback loop of Plane problem POMDP
 
     Args:
-        plane_problem (PlaneProblem): an instance of the plane problem.
-        planner (Planner): a planner
+        TODO
     """
+
+    # TODO: These should be processed within the agent and not here!!!! FIX!!
+    plane_problem = rl_agent.return_plane_problem()
+    planner = rl_agent.return_planner()
 
     n, k = size  # TODO: size gets none by default, fix or do error handling
     width = n
@@ -383,18 +391,34 @@ def init_plane_problem():
     return plane_problem
 
 
-def run(simulate_agent=False, loops=15, save_animation=False, save_agent=False, load_agent=False, scenario_number="one"):
+def run(animate_agent=False, loops=15, save_animation=False, save_agent=False, load_agent=False, scenario_number="one"):
+    """
+    Wrapper function for running the simulation/animation of the agent
+
+    params
+    ======
+    animate_agent: Boolean - whether we animate one run of the agent or simulate data instead
+    loops: if we simulate (animate_agent is False) then for how many loops
+    save_animation: if we animate (animate_agent is True) then whther to save the generated animation or not
+
+    
+    """
     config.run_scenario(scenario_number)
     # TODO: We should be able to init some standard scenarios!
     # And have one pickle loaded agent to fly those!
     # -> this way we can compare stress models
 
-    plane_problem = init_plane_problem()
+    # TODO: USE THE AGENT CLASS INSTEAD
+    #plane_problem = init_plane_problem() # REMOVE
+    n = config.SIZE[0]
+    k = config.SIZE[1]
+    rl_agent = RLAgent(init_plane_in_grid=[n, k], init_plane_state="pre-flight", init_wind_state=True, init_fuel_state=config.START_FUEL)
+    #agent_policy = rl_agent.return_policy()
 
-    pomcp = pomdp_py.POMCP(max_depth=6, discount_factor=0.85,  # what does the discount_factor do?
-                           planning_time=-1, num_sims=config.NUM_SIMS, exploration_const=100,
-                           rollout_policy=plane_problem.agent.policy_model,
-                           show_progress=False, pbar_update_interval=1000)
+    #pomcp = pomdp_py.POMCP(max_depth=6, discount_factor=0.85,  # what does the discount_factor do?
+    #                       planning_time=-1, num_sims=config.NUM_SIMS, exploration_const=100,
+    #                       rollout_policy=plane_problem.agent.policy_model,
+    #                       show_progress=False, pbar_update_interval=1000)
 
     # TODO: Doesnt work. Currently our problem is that we can have histogram as starting point for agent -> FIX
     # Load agent
@@ -402,10 +426,12 @@ def run(simulate_agent=False, loops=15, save_animation=False, save_agent=False, 
         with open(f'saved_agents/agent.pickle', 'rb') as file2:
             plane_problem.agent = pickle.load(file2)
 
-    if simulate_agent == True:
+    # TODO: data gatherer should instead get the rl_agent which should then make the steps
+    if animate_agent == False:
+        # TODO: Use loop but make it so that 
         for i in range(loops):
             print(f"\n --Loop {i+1}--")
-            runner_data_gather(plane_problem, pomcp, scenario_name=(
+            runner_data_gather(rl_agent, scenario_name=(
                 "scenario_"+scenario_number), write_data=True)
 
             # Reset
@@ -415,7 +441,7 @@ def run(simulate_agent=False, loops=15, save_animation=False, save_agent=False, 
         n = config.SIZE[0]
         k = config.SIZE[1]
 
-        runner_a(plane_problem, planner=pomcp, size=(
+        runner_a(rl_agent, size=(
             n, k), save_animation=save_animation, save_agent=save_agent)
 
 
@@ -424,11 +450,11 @@ if __name__ == '__main__':
 
     # SIMULATE ALL OF THE THESIS DATA
     print("SIMULATION STARTING")
-    run(simulate_agent=True, loops=100, scenario_number="one") #simple
-    print("1/4 DONE")
-    run(simulate_agent=True, loops=100, scenario_number="two") #wind
-    print("2/4 DONE")
-    run(simulate_agent=True, loops=100, scenario_number="three") #fuel
-    print("3/4 DONE")
-    run(simulate_agent=True, loops=100, scenario_number="four") #wind and fuel
-    print("4/4 DONE")
+    run(loops=40, scenario_number="one") #simple
+    #print("1/4 DONE")
+    #run(loops=100, scenario_number="two") #wind
+    #print("2/4 DONE")
+    #run(loops=100, scenario_number="three") #fuel
+    #print("3/4 DONE")
+    #run(loops=100, scenario_number="four") #wind and fuel aka extreme
+    #print("4/4 DONE")
