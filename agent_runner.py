@@ -160,7 +160,7 @@ def process_data(stress_data_dict, scenario_name):
     df.to_csv(output_path, mode='a', header=not os.path.exists(output_path))
 
 
-def runner_data_gather(FIX_plane_problem, FIX_planner, rl_agent, scenario_name, write_data=True):
+def runner_data_gather(rl_agent, scenario_name, write_data=True):
     """
     Animates and runs the action-feedback loop of Plane problem POMDP
 
@@ -183,6 +183,7 @@ def runner_data_gather(FIX_plane_problem, FIX_planner, rl_agent, scenario_name, 
         global total_reward  # hacky way to update total_reward
 
         # print(plane_problem.env.state.position)
+        rl_agent.init_plane_problem()
         agent_position = rl_agent.return_plane_position()
 
         # TODO: combine this with the one below?
@@ -211,7 +212,7 @@ def runner_data_gather(FIX_plane_problem, FIX_planner, rl_agent, scenario_name, 
             frame_data.append(step)
 
     # Here range determines the max amount of steps for one round for agent 
-    # (needed in case it somehow gets stuck and doesnt crash)
+    # (needed in case it somehow gets stuck and doesnt fall down)
     for i in range(50):
         complete = run_func(i)
         if complete:
@@ -246,6 +247,7 @@ def runner_a(rl_agent, size=None, save_animation=False, save_agent=False):
     """
 
     # TODO: These should be processed within the agent and not here!!!! FIX!!
+    rl_agent.init_plane_problem()
     plane_problem = rl_agent.return_plane_problem()
     planner = rl_agent.return_planner()
 
@@ -450,7 +452,7 @@ if __name__ == '__main__':
 
     # SIMULATE ALL OF THE THESIS DATA
     print("SIMULATION STARTING")
-    run(loops=40, scenario_number="one") #simple
+    run(loops=10, scenario_number="one") #simple
     #print("1/4 DONE")
     #run(loops=100, scenario_number="two") #wind
     #print("2/4 DONE")

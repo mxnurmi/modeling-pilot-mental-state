@@ -17,7 +17,7 @@ class RLAgentWrapper():
             (self.init_plane_in_grid[0], self.init_plane_in_grid[1]), self.init_plane_state, self.init_wind_state, self.init_fuel_state)
 
         init_belief = pomdp_py.Particles([init_true_state])
-        self.plane_problem = PlaneProblem(self.n, self.k, init_true_state, init_belief)
+        self.plane_problem = PlaneProblem(self.init_plane_in_grid[0], self.init_plane_in_grid[1], init_true_state, init_belief)
         self.plane_problem.agent.set_belief(init_belief, prior=True)
 
         # TODO: Should these be defined somewhere separately?
@@ -34,8 +34,8 @@ class RLAgentWrapper():
 
     def find_new_state_no_ext_params(self):
         """ Computes POMCP-based best action and and uses it to update agent's state
-
         """
+
         action = self.pomcp.plan(self.plane_problem.agent)
 
         env_reward = self.plane_problem.env.state_transition(
