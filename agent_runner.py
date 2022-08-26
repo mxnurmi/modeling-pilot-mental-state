@@ -177,7 +177,7 @@ def runner_data_gather(rl_agent, scenario_name, write_data=True):
     ctrl_stress_data = [-1]
 
     frame_data = [-1]
-    state_data = ["preflight"]
+    state_data = ["pre-flight"]
 
     def run_func(step):
         global total_reward  # hacky way to update total_reward
@@ -278,7 +278,7 @@ def runner_a(rl_agent, size=None, save_animation=False, save_agent=False):
     value_stress_data = [-1]
 
     frame_data = [-1]
-    state_data = ["preflight"]
+    state_data = ["pre-flight"]
 
     def animate_func(frame):
         global total_reward  # hacky way to update total_reward
@@ -383,7 +383,6 @@ def runner_a(rl_agent, size=None, save_animation=False, save_agent=False):
 
 
 def init_plane_problem():
-
     n = config.SIZE[0]
     k = config.SIZE[1]
 
@@ -457,11 +456,11 @@ if __name__ == '__main__':
 
     # SIMULATE ALL OF THE THESIS DATA
     print("SIMULATION STARTING")
-    run(loops=30, scenario_number="one") #simple
-    print("1/4 DONE")
-    run(loops=30, scenario_number="two") #wind
-    print("2/4 DONE")
-    run(loops=30, scenario_number="three") #fuel
-    print("3/4 DONE")
-    run(loops=30, scenario_number="four") #wind and fuel aka extreme
-    print("4/4 DONE")
+    run(loops=5, scenario_number="one") #simple
+    #print("1/4 DONE")
+    #run(loops=80, scenario_number="two") #wind
+    #print("2/4 DONE")
+    #run(loops=80, scenario_number="three") #fuel
+    #print("3/4 DONE")
+    #run(loops=80, scenario_number="four") #wind and fuel aka extreme
+    #print("4/4 DONE")

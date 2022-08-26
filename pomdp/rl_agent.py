@@ -5,6 +5,18 @@ from models import *
 from problem import PlaneProblem
 #from stress import stress_estimator
 
+def generate_random_state(start_state):
+    location = config.LINKOPING_LOCATION
+    return PlaneState(location, start_state, True, config.START_FUEL)
+
+
+def generate_init_belief(num_particles, start_state):
+    particles = []
+    for _ in range(num_particles):
+        particles.append(generate_random_state(start_state))
+
+    return pomdp_py.Particles(particles)
+
 class RLAgentWrapper():
     def __init__(self, init_plane_in_grid, init_plane_state, init_wind_state, init_fuel_state):
         self.init_plane_in_grid = init_plane_in_grid # plane's initial location (List)
@@ -16,7 +28,8 @@ class RLAgentWrapper():
         init_true_state = PlaneState(
             (self.init_plane_in_grid[0], self.init_plane_in_grid[1]), self.init_plane_state, self.init_wind_state, self.init_fuel_state)
 
-        init_belief = pomdp_py.Particles([init_true_state])
+        #init_belief = pomdp_py.Particles([init_true_state])
+        init_belief = generate_init_belief(50, "pre-flight")
         self.plane_problem = PlaneProblem(self.init_plane_in_grid[0], self.init_plane_in_grid[1], init_true_state, init_belief)
         self.plane_problem.agent.set_belief(init_belief, prior=True)
 
@@ -37,19 +50,20 @@ class RLAgentWrapper():
         """
 
         action = self.pomcp.plan(self.plane_problem.agent)
-
         env_reward = self.plane_problem.env.state_transition(
             action, execute=True)
-
         real_observation = self.plane_problem.env.provide_observation(
             self.plane_problem.agent.observation_model, action)
 
-        self.plane_problem.agent.update_history(action, real_observation)
-        # TODO: You need to build particle deprivation handilng here (try - catch)
-
-        self.pomcp.update(self.plane_problem.agent, action, real_observation)
+        self.plane_problem.agent.update_history(action, 
+                                                real_observation)
+        self.pomcp.update(self.plane_problem.agent, 
+                          action, 
+                          real_observation)
 
         true_state = copy.deepcopy(self.plane_problem.env.state)
+        #belief_atm = (self.plane_problem.agent.cur_belief)
+        #print(belief_atm)
         plane_location = true_state.coordinates
 
         return action, true_state, plane_location, env_reward
@@ -75,6 +89,8 @@ class RLAgentWrapper():
             action, real_observation)
         self.pomcp.update(self.plane_problem.agent, action, real_observation)
         agent_state = copy.deepcopy(self.plane_problem.env.state)
+
+        #print(agent_state)
         plane_location = agent_state.coordinates
 
     def compute_stress(self, stress_estimator):

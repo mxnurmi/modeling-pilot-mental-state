@@ -5,7 +5,7 @@ This project was made in collaboration with Saab and Aalto University. The goal 
 Modeling tools
 ==============
 
-The modeling code can be ran from the ./runner.py file, with the run() function. The run function has three alternative ways it can be used to produce results of the RL agent's behaviour
+The modeling code can be ran from the agent_runner.py file, through the `run()` function. The `run` function has three alternative ways it can be used to produce results of the RL agent's behaviour:
 
 In the first case we can use the agent to produce a real-time visualization of it running in the given task environment:
 
@@ -21,11 +21,11 @@ And in the third scenario we can generate a datafile that contains the results o
 
 `run(simulate_agent=True, loops=40, scenario_number="five")`
 
-Note that even 100 loops can take a considerable amount of time on a basic computer as the agent will run about 40000 simulations at each step, which each loop will have multiple of.
+Note that even 100 loops can take a considerable amount of time on a standard computer as the agent will run about 40000 simulations at each step, which each loop will have multiple of (depending on the maximum fuel for the agent it can take 20 steps to crash).
 
-Modeling in simulation in real-time
-===================================
+Modeling with in real-time with X-Plane flight simulator
+========================================================
 
 Finally, besides offering these modeling tools, the tool also offers a way the tool in XPlane (11), providing real-time stress evaluation for an user flying in the simulation.
 
-This can be achieved by starting a flight in XPlane and then running the xplane_master.py
+This can be achieved by starting a flight in XPlane and then running the xplane_communicator.py

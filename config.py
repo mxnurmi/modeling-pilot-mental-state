@@ -3,12 +3,6 @@ from math import dist
 from typing import Tuple
 
 EPSILON = 1e-3
-# START_FUEL = 20  # also max fuel
-#STRESS = 0
-# MALMEN_LOCATION = (1, 1)  # (7, 9)
-#LINKOPING_LOCATION = (5, 5)
-#SIZE = (8, 8)
-#WIND_PROB = 1
 
 #  TODO: TO BE ADDED:
 # - fuel dumb at 40% way where you only have enough fuel for return
