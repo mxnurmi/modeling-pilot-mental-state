@@ -183,7 +183,6 @@ def runner_data_gather(rl_agent, scenario_name, write_data=True):
         global total_reward  # hacky way to update total_reward
 
         # print(plane_problem.env.state.position)
-        rl_agent.init_plane_problem()
         agent_position = rl_agent.return_plane_position()
 
         # TODO: combine this with the one below?
@@ -213,10 +212,15 @@ def runner_data_gather(rl_agent, scenario_name, write_data=True):
 
     # Here range determines the max amount of steps for one round for agent 
     # (needed in case it somehow gets stuck and doesnt fall down)
-    for i in range(50):
-        complete = run_func(i)
-        if complete:
-            break
+
+    try:
+        for i in range(50):
+            complete = run_func(i)
+            if complete:
+                break
+    except ValueError as e:
+        print(f"One of the data gathering runs gave the following error: {e} \n Skipping this specific loop")
+        return
 
     if write_data == True:
         # TODO: we should submit a dict here instead so we can change what data is written dynamically
@@ -415,6 +419,7 @@ def run(animate_agent=False, loops=15, save_animation=False, save_agent=False, l
     n = config.SIZE[0]
     k = config.SIZE[1]
     rl_agent = RLAgent(init_plane_in_grid=[n, k], init_plane_state="pre-flight", init_wind_state=True, init_fuel_state=config.START_FUEL)
+    rl_agent.init_plane_problem()
     #agent_policy = rl_agent.return_policy()
 
     #pomcp = pomdp_py.POMCP(max_depth=6, discount_factor=0.85,  # what does the discount_factor do?
@@ -424,9 +429,9 @@ def run(animate_agent=False, loops=15, save_animation=False, save_agent=False, l
 
     # TODO: Doesnt work. Currently our problem is that we can have histogram as starting point for agent -> FIX
     # Load agent
-    if load_agent == True:
-        with open(f'saved_agents/agent.pickle', 'rb') as file2:
-            plane_problem.agent = pickle.load(file2)
+    #if load_agent == True:
+    #    with open(f'saved_agents/agent.pickle', 'rb') as file2:
+    #        plane_problem.agent = pickle.load(file2)
 
     # TODO: data gatherer should instead get the rl_agent which should then make the steps
     if animate_agent == False:
@@ -437,7 +442,7 @@ def run(animate_agent=False, loops=15, save_animation=False, save_agent=False, l
                 "scenario_"+scenario_number), write_data=True)
 
             # Reset
-            plane_problem = init_plane_problem()
+            rl_agent.init_plane_problem()
 
     else:
         n = config.SIZE[0]
@@ -452,11 +457,11 @@ if __name__ == '__main__':
 
     # SIMULATE ALL OF THE THESIS DATA
     print("SIMULATION STARTING")
-    run(loops=10, scenario_number="one") #simple
-    #print("1/4 DONE")
-    #run(loops=100, scenario_number="two") #wind
-    #print("2/4 DONE")
-    #run(loops=100, scenario_number="three") #fuel
-    #print("3/4 DONE")
-    #run(loops=100, scenario_number="four") #wind and fuel aka extreme
-    #print("4/4 DONE")
+    run(loops=30, scenario_number="one") #simple
+    print("1/4 DONE")
+    run(loops=30, scenario_number="two") #wind
+    print("2/4 DONE")
+    run(loops=30, scenario_number="three") #fuel
+    print("3/4 DONE")
+    run(loops=30, scenario_number="four") #wind and fuel aka extreme
+    print("4/4 DONE")

@@ -45,6 +45,8 @@ class RLAgentWrapper():
             self.plane_problem.agent.observation_model, action)
 
         self.plane_problem.agent.update_history(action, real_observation)
+        # TODO: You need to build particle deprivation handilng here (try - catch)
+
         self.pomcp.update(self.plane_problem.agent, action, real_observation)
 
         true_state = copy.deepcopy(self.plane_problem.env.state)

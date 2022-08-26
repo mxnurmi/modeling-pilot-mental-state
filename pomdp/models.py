@@ -170,7 +170,7 @@ class PolicyModel(pomdp_py.RolloutPolicy):
 
 
 class ObservationModel(pomdp_py.ObservationModel):
-    def __init__(self, noise=0.3):
+    def __init__(self, noise=0):
         self.noise = noise
 
     def probability(self, observation, next_state, action):
