@@ -29,13 +29,13 @@ class RLAgentWrapper():
             (self.init_plane_in_grid[0], self.init_plane_in_grid[1]), self.init_plane_state, self.init_wind_state, self.init_fuel_state)
 
         #init_belief = pomdp_py.Particles([init_true_state])
-        init_belief = generate_init_belief(50, "pre-flight")
+        init_belief = generate_init_belief(50, "preflight")
         self.plane_problem = PlaneProblem(self.init_plane_in_grid[0], self.init_plane_in_grid[1], init_true_state, init_belief)
         self.plane_problem.agent.set_belief(init_belief, prior=True)
 
         # TODO: Should these be defined somewhere separately?
         self.pomcp = pomdp_py.POMCP(max_depth=6, discount_factor=0.85, # what does the discount_factor do?
-                                    planning_time=0.5, num_sims=-1, exploration_const=100,
+                                    planning_time=-1, num_sims=40000, exploration_const=100,
                                     rollout_policy=self.plane_problem.agent.policy_model,
                                     show_progress=False, pbar_update_interval=1000)
 
@@ -118,5 +118,8 @@ class RLAgentWrapper():
 
     def return_planner(self):
         return self.pomcp
+
+    def return_current_belief_dist(self):
+        return self.plane_problem.agent.cur_belief
     
     

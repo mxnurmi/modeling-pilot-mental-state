@@ -47,6 +47,7 @@ def compute_stress(agent, num_sims):
     # maybe Qnodes to Vnodes ratio as control? -> not good
 
     dd = TreeDebugger(agent.tree)
+    #tree_nodes = dd.nn
 
     pred_ctrl_stress = compute_pred_ctrl_stress(agent, dd, num_sims)
     ctrl_stress = compute_complexity_stress(dd, num_sims)

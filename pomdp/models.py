@@ -38,13 +38,13 @@ class TransitionModel(pomdp_py.TransitionModel):
             return 1 - config.EPSILON
 
     def sample(self, state, action):
-        if state.position == "pre-flight":
+        if state.position == "preflight":
             return PlaneState(config.LINKOPING_LOCATION, "takeoff", True, config.START_FUEL) 
 
         if state.position == "landed" or state.position == "crashed":
             # TODO: Which one of these is correct from the stress mdoeling perspective? Does resetting affect the complexity incorrectly etc.?
             #return PlaneState(state.coordinates, state.position, state.wind, state.fuel) # final state
-            return PlaneState(config.LINKOPING_LOCATION, "pre-flight", True, config.START_FUEL)  # reset state
+            return PlaneState(config.LINKOPING_LOCATION, "preflight", True, config.START_FUEL)  # reset state
 
         if state.fuel < 1:
             return PlaneState(state.coordinates, "crashed", True, state.fuel)
@@ -170,7 +170,7 @@ class PolicyModel(pomdp_py.RolloutPolicy):
 
 
 class ObservationModel(pomdp_py.ObservationModel):
-    def __init__(self, noise=0.3):
+    def __init__(self, noise=0):
         self.noise = noise
 
     def probability(self, observation, next_state, action):

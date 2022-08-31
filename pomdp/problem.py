@@ -63,7 +63,7 @@ class PlaneProblem(pomdp_py.POMDP):
         agent = pomdp_py.Agent(init_belief,
                                PolicyModel(n, k),
                                TransitionModel(n, k),
-                               ObservationModel(noise=0.0),
+                               ObservationModel(noise=0),
                                RewardModel())
         # TODO: you should produce a custom env here that allows us to override the transition sometimes to match the simulator
         env = PlaneProblemEnvironment(init_true_state, n, k)

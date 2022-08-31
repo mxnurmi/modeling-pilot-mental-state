@@ -71,7 +71,7 @@ place_holder = """
 
 def generate_random_state():
     location = config.LINKOPING_LOCATION
-    return PlaneState(location, "pre-flight", True, config.START_FUEL)
+    return PlaneState(location, "preflight", True, config.START_FUEL)
 
 
 def generate_init_belief(num_particles):
@@ -160,7 +160,7 @@ def process_data(stress_data_dict, scenario_name):
     df.to_csv(output_path, mode='a', header=not os.path.exists(output_path))
 
 
-def runner_data_gather(rl_agent, scenario_name, write_data=True):
+def runner_data_gather(rl_agent, scenario_name, debug_plane_problem, debug_planner, write_data=True):
     """
     Animates and runs the action-feedback loop of Plane problem POMDP
 
@@ -175,15 +175,15 @@ def runner_data_gather(rl_agent, scenario_name, write_data=True):
     value_stress_data = [-1]
     pred_stress_data = [-1]
     ctrl_stress_data = [-1]
-
     frame_data = [-1]
-    state_data = ["pre-flight"]
+    state_data = ["preflight"]
 
     def run_func(step):
-        global total_reward  # hacky way to update total_reward
+        #global total_reward  # hacky way to update total_reward
 
         # print(plane_problem.env.state.position)
         agent_position = rl_agent.return_plane_position()
+        #debug_agent_position = debug_plane_problem.env.state.position
 
         # TODO: combine this with the one below?
         if agent_position == "landed" or agent_position == "crashed":
@@ -192,23 +192,31 @@ def runner_data_gather(rl_agent, scenario_name, write_data=True):
             #process_data(attribute_stress_data, predict_control_stress_data, value_stress_data, state_data, end_state=plane_problem.env.state.position)
             return True
         else:
-
             # TODO: This misses the first state "takeoff" but that state does not have a tree yet so should we skip it anyway?
             #_, _, _, _ = pomdp_step(
-            #    plane_problem, planner)
+            #    debug_plane_problem, debug_planner)
             rl_agent.find_new_state_no_ext_params()
             #problem_agent = rl_agent.return_agent()
             #planner_num_of_sims = rl_agent.return_num_of_planning_sims()
-            # TODO: THIS SHOULD RETURN DICT
+            # TODO: THIS SHOULD RETURN/UPDATE DICT
             value_stress, attribute_stress, predict_control_stress, ctrl_stress, pred_stress = rl_agent.compute_stress(stress_estimator)
 
+            #db_value_stress, db_attribute_stress, db_predict_control_stress, db_ctrl_stress, db_pred_stress = stress_estimator.compute_stress(
+            #    debug_plane_problem.agent, num_sims=debug_planner.last_num_sims)
+
+            #agent_belief = rl_agent.return_current_belief_dist().get_histogram()
+            #db_agent_belief = debug_plane_problem.agent.cur_belief.get_histogram()
+            
             value_stress_data.append(value_stress)
             attribute_stress_data.append(attribute_stress)
             predict_control_stress_data.append(predict_control_stress)
             pred_stress_data.append(pred_stress)
             ctrl_stress_data.append(ctrl_stress)
-            state_data.append(agent_position)
+            state_data.append(rl_agent.return_plane_position()) # NOTE: Make sure you call it here as it is updated right above!
             frame_data.append(step)
+
+            #debug_agent_position = debug_plane_problem.env.state.position
+
 
     # Here range determines the max amount of steps for one round for agent 
     # (needed in case it somehow gets stuck and doesnt fall down)
@@ -218,6 +226,8 @@ def runner_data_gather(rl_agent, scenario_name, write_data=True):
             complete = run_func(i)
             if complete:
                 break
+
+
     except ValueError as e:
         print(f"One of the data gathering runs gave the following error: {e} \n Skipping this specific loop")
         return
@@ -225,6 +235,7 @@ def runner_data_gather(rl_agent, scenario_name, write_data=True):
     if write_data == True:
         # TODO: we should submit a dict here instead so we can change what data is written dynamically
         end_state=rl_agent.return_plane_position()
+        #db_end_state = debug_plane_problem.env.state.position
         end_state_data = [end_state] * len(state_data)
 
         d = {'heuristic_stress': attribute_stress_data, 
@@ -233,7 +244,7 @@ def runner_data_gather(rl_agent, scenario_name, write_data=True):
             'ctrl_stress': ctrl_stress_data,
             'pred_stress': pred_stress_data,
             'state_name': state_data,
-            'end_state': end_state
+            'end_state': end_state_data
             }
 
         process_data(d, scenario_name=scenario_name)
@@ -278,7 +289,7 @@ def runner_a(rl_agent, size=None, save_animation=False, save_agent=False):
     value_stress_data = [-1]
 
     frame_data = [-1]
-    state_data = ["pre-flight"]
+    state_data = ["preflight"]
 
     def animate_func(frame):
         global total_reward  # hacky way to update total_reward
@@ -387,7 +398,7 @@ def init_plane_problem():
     k = config.SIZE[1]
 
     init_true_state = PlaneState(
-        config.LINKOPING_LOCATION, "pre-flight", True, config.START_FUEL)
+        config.LINKOPING_LOCATION, "preflight", True, config.START_FUEL)
     init_belief = generate_init_belief(50)
 
     plane_problem = PlaneProblem(n, k, init_true_state, init_belief)
@@ -414,16 +425,16 @@ def run(animate_agent=False, loops=15, save_animation=False, save_agent=False, l
     # -> this way we can compare stress models
 
     # TODO: USE THE AGENT CLASS INSTEAD
-    #plane_problem = init_plane_problem() # REMOVE
+    #debug_plane_problem = init_plane_problem() # REMOVE
     n = config.SIZE[0]
     k = config.SIZE[1]
-    rl_agent = RLAgent(init_plane_in_grid=[n, k], init_plane_state="pre-flight", init_wind_state=True, init_fuel_state=config.START_FUEL)
+    rl_agent = RLAgent(init_plane_in_grid=[n, k], init_plane_state="preflight", init_wind_state=True, init_fuel_state=config.START_FUEL)
     rl_agent.init_plane_problem()
     #agent_policy = rl_agent.return_policy()
 
     #pomcp = pomdp_py.POMCP(max_depth=6, discount_factor=0.85,  # what does the discount_factor do?
     #                       planning_time=-1, num_sims=config.NUM_SIMS, exploration_const=100,
-    #                       rollout_policy=plane_problem.agent.policy_model,
+    #                       rollout_policy=debug_plane_problem.agent.policy_model,
     #                       show_progress=False, pbar_update_interval=1000)
 
     # TODO: Doesnt work. Currently our problem is that we can have histogram as starting point for agent -> FIX
@@ -438,10 +449,11 @@ def run(animate_agent=False, loops=15, save_animation=False, save_agent=False, l
         for i in range(loops):
             print(f"\n --Loop {i+1}--")
             runner_data_gather(rl_agent, scenario_name=(
-                "scenario_"+scenario_number), write_data=True)
+                "scenario_"+scenario_number), debug_plane_problem=None, debug_planner=None, write_data=True)
 
             # Reset
             rl_agent.init_plane_problem()
+            #debug_plane_problem = init_plane_problem() # TODO: REMOVE (debug)!
 
     else:
         n = config.SIZE[0]
@@ -456,11 +468,11 @@ if __name__ == '__main__':
 
     # SIMULATE ALL OF THE THESIS DATA
     print("SIMULATION STARTING")
-    run(loops=5, scenario_number="one") #simple
-    #print("1/4 DONE")
-    #run(loops=80, scenario_number="two") #wind
-    #print("2/4 DONE")
-    #run(loops=80, scenario_number="three") #fuel
-    #print("3/4 DONE")
-    #run(loops=80, scenario_number="four") #wind and fuel aka extreme
-    #print("4/4 DONE")
+    run(loops=50, scenario_number="one") #simple
+    print("1/4 DONE")
+    run(loops=80, scenario_number="two") #wind
+    print("2/4 DONE")
+    run(loops=80, scenario_number="three") #fuel
+    print("3/4 DONE")
+    run(loops=80, scenario_number="four") #wind and fuel aka extreme
+    print("4/4 DONE")
