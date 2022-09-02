@@ -1,5 +1,6 @@
 # %%
 
+from operator import index
 from attr import attr
 import pomdp_py
 import copy
@@ -146,21 +147,21 @@ def pomdp_step(plane_problem, planner):
 total_reward = 0
 
 
-def process_data(stress_data_dict, scenario_name):
+def process_data(stress_data_df, scenario_name):
 
     #end_state_data = [end_state] * len(state_data)
 
     #d = {'attribute_stress': attribute_stress_data, 'pred_control_stress': predict_control_stress_data,
     #     'value_stress': value_stress_data, 'state_name': state_data, 'end_state': end_state_data}
-    df = pd.DataFrame(stress_data_dict)
-    dt_string = datetime.now().strftime("%d-%m")
+    #df = pd.DataFrame(stress_data_dict)
+    #dt_string = datetime.now().strftime("%d-%m")
     dt_string = ""
 
     output_path = "./data/stress_data_" + scenario_name + "__" + dt_string + ".csv"
-    df.to_csv(output_path, mode='a', header=not os.path.exists(output_path))
+    stress_data_df.to_csv(output_path, mode='a', header=not os.path.exists(output_path))
 
 
-def runner_data_gather(rl_agent, scenario_name, debug_plane_problem, debug_planner, write_data=True):
+def runner_data_gather(rl_agent, scenario_name, write_data=True):
     """
     Animates and runs the action-feedback loop of Plane problem POMDP
 
@@ -170,85 +171,81 @@ def runner_data_gather(rl_agent, scenario_name, debug_plane_problem, debug_plann
     """
 
     # TODO: Should probably have some class that maintains data so we don't need to do everything here??
-    attribute_stress_data = [-1]
-    predict_control_stress_data = [-1]
-    value_stress_data = [-1]
-    pred_stress_data = [-1]
-    ctrl_stress_data = [-1]
-    frame_data = [-1]
-    state_data = ["preflight"]
+    #attribute_stress_data = [-1]
+    #predict_control_stress_data = [-1]
+    #value_stress_data = [-1]
+    #pred_stress_data = [-1]
+    #ctrl_stress_data = [-1]
+    #frame_data = [-1]
 
-    def run_func(step):
-        #global total_reward  # hacky way to update total_reward
+    state_data = [] # we used to have preflight here! "preflight"
 
-        # print(plane_problem.env.state.position)
+    # TODO: Maybe add the extra row at the end so we don'tneed to predefine columns?
+    
+
+    def run_func(step, stress_df):
+
         agent_position = rl_agent.return_plane_position()
-        #debug_agent_position = debug_plane_problem.env.state.position
 
         # TODO: combine this with the one below?
         if agent_position == "landed" or agent_position == "crashed":
             # if write_data == True:
             # TODO fix process_data if need be
             #process_data(attribute_stress_data, predict_control_stress_data, value_stress_data, state_data, end_state=plane_problem.env.state.position)
-            return True
+            return True, stress_df
         else:
-            # TODO: This misses the first state "takeoff" but that state does not have a tree yet so should we skip it anyway?
-            #_, _, _, _ = pomdp_step(
-            #    debug_plane_problem, debug_planner)
             rl_agent.find_new_state_no_ext_params()
-            #problem_agent = rl_agent.return_agent()
-            #planner_num_of_sims = rl_agent.return_num_of_planning_sims()
             # TODO: THIS SHOULD RETURN/UPDATE DICT
-            value_stress, attribute_stress, predict_control_stress, ctrl_stress, pred_stress = rl_agent.compute_stress(stress_estimator)
+            #value_stress, attribute_stress, predict_control_stress, ctrl_stress, pred_stress = rl_agent.compute_stress(stress_estimator)
+            stress_data_dict = rl_agent.compute_stress(stress_estimator)
+            new_stress_data = pd.DataFrame(stress_data_dict, index=[0])
+            stress_df = pd.concat([stress_df, new_stress_data], ignore_index=True)
 
-            #db_value_stress, db_attribute_stress, db_predict_control_stress, db_ctrl_stress, db_pred_stress = stress_estimator.compute_stress(
-            #    debug_plane_problem.agent, num_sims=debug_planner.last_num_sims)
+            #value_stress_data.append(value_stress)
+            #attribute_stress_data.append(attribute_stress)
+            #predict_control_stress_data.append(predict_control_stress)
+            #pred_stress_data.append(pred_stress)
+            #ctrl_stress_data.append(ctrl_stress)
 
-            #agent_belief = rl_agent.return_current_belief_dist().get_histogram()
-            #db_agent_belief = debug_plane_problem.agent.cur_belief.get_histogram()
-            
-            value_stress_data.append(value_stress)
-            attribute_stress_data.append(attribute_stress)
-            predict_control_stress_data.append(predict_control_stress)
-            pred_stress_data.append(pred_stress)
-            ctrl_stress_data.append(ctrl_stress)
-            # TODO: we should return one dict/pd.df for stress data and one for stress. Then combine them here.
+            #runner_dict = {'state_name': rl_agent.return_plane_position()}
             state_data.append(rl_agent.return_plane_position()) # NOTE: Make sure you call it here as it is updated right above!
-            frame_data.append(step)
-
-            #debug_agent_position = debug_plane_problem.env.state.position
+            #frame_data.append(step)
+            return False, stress_df
 
 
     # Here range determines the max amount of steps for one round for agent 
     # (needed in case it somehow gets stuck and doesnt fall down)
-
+    stress_df = pd.DataFrame()
     try:
         for i in range(50):
-            complete = run_func(i)
+            complete, stress_df = run_func(i, stress_df)
             if complete:
                 break
 
-
     except ValueError as e:
         print(f"One of the data gathering runs gave the following error: {e} \n Skipping this specific loop")
-        return
+        raise
 
     if write_data == True:
         # TODO: we should submit a dict here instead so we can change what data is written dynamically
         end_state=rl_agent.return_plane_position()
         #db_end_state = debug_plane_problem.env.state.position
-        end_state_data = [end_state] * len(state_data)
+        end_state_data = [end_state] * len(state_data) # TODO: This should be dict height
+        stress_df["state_name"] = state_data
+        stress_df["end_state"] = end_state_data
 
-        d = {'heuristic_stress': attribute_stress_data, 
-            'pred_control_stress': predict_control_stress_data,
-            'value_stress': value_stress_data,
-            'ctrl_stress': ctrl_stress_data,
-            'pred_stress': pred_stress_data,
-            'state_name': state_data,
-            'end_state': end_state_data
-            }
+        #df.append(pd.Series(), ignore_index=True)
 
-        process_data(d, scenario_name=scenario_name)
+        #d = {'heuristic_stress': attribute_stress_data, 
+        #    'pred_control_stress': predict_control_stress_data,
+        #    'value_stress': value_stress_data,
+        #    'ctrl_stress': ctrl_stress_data,
+        #    'pred_stress': pred_stress_data,
+        #    'state_name': state_data,
+        #    'end_state': end_state_data
+        #    }
+
+        process_data(stress_df, scenario_name=scenario_name)
     # load it
     # with open(f'test.pickle', 'rb') as file2:
     #cloned_agent = pickle.load(file2)
@@ -449,8 +446,7 @@ def run(animate_agent=False, loops=15, save_animation=False, save_agent=False, l
         # TODO: Use loop but make it so that 
         for i in range(loops):
             print(f"\n --Loop {i+1}--")
-            runner_data_gather(rl_agent, scenario_name=(
-                "scenario_"+scenario_number), debug_plane_problem=None, debug_planner=None, write_data=True)
+            runner_data_gather(rl_agent, scenario_name=("scenario_"+scenario_number), write_data=True)
 
             # Reset
             rl_agent.init_plane_problem()
@@ -469,11 +465,11 @@ if __name__ == '__main__':
 
     # SIMULATE ALL OF THE THESIS DATA
     print("SIMULATION STARTING")
-    run(loops=50, scenario_number="one") #simple
-    print("1/4 DONE")
-    run(loops=80, scenario_number="two") #wind
-    print("2/4 DONE")
-    run(loops=80, scenario_number="three") #fuel
-    print("3/4 DONE")
-    run(loops=80, scenario_number="four") #wind and fuel aka extreme
-    print("4/4 DONE")
+    run(loops=20, scenario_number="one") #simple
+    #print("1/4 DONE")
+    #run(loops=80, scenario_number="two") #wind
+    #print("2/4 DONE")
+    #run(loops=80, scenario_number="three") #fuel
+    #print("3/4 DONE")
+    #run(loops=80, scenario_number="four") #wind and fuel aka extreme
+    #print("4/4 DONE")

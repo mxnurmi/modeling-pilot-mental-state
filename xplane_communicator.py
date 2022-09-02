@@ -264,7 +264,7 @@ def monitor(plane_coordinates_x, plane_coordinates_y, run, plane_in_grid, plot_w
                     agent_state = copy.deepcopy(plane_problem.env.state)
 
                     value_stress, attribute_stress, predict_control_stress, ctrl_stress, pred_stress = stress_estimator.compute_stress(
-                        plane_problem.agent, num_sims=pomcp.last_num_sims) # TODO: Maybe return dict instead?
+                        plane_problem.agent, num_sims=pomcp.last_num_sims) # TODO: Maybe return dict instead? #TODO: FIX!
 
                     #fuel = client.sendDREF("sim/cockpit2/fuel/fuel_quantity", values=[(0.0,0.0,0,0,0,0,0,0,0)]) -> doesnt work
 

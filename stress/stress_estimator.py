@@ -4,14 +4,16 @@ import os
 import sys
 import inspect
 
+import pandas as pd
+
 # Same folder imports
 currentdir = os.path.dirname(os.path.abspath(
     inspect.getfile(inspect.currentframe())))
 sys.path.insert(0, currentdir)
 
-from attribute_stress import compute_attribute_stress
-from predictability_controllability_stress import compute_pred_ctrl_stress, compute_complexity_stress, compute_predictability_stress
-from value_stress import compute_value_stress
+from stress_functions.attribute_stress import compute_attribute_stress
+from stress_functions.predictability_controllability_stress import compute_pred_ctrl_stress, compute_complexity_stress, compute_predictability_stress
+from stress_functions.value_stress import compute_value_stress
 
 # Stress: Stress is created by acting normally in extraordinary situations
 
@@ -58,6 +60,15 @@ def compute_stress(agent, num_sims):
     # TODO: Can we somehow measure when a change to an uncertain state happens? E.g. fuel dump has 10% chance but when it happens its unlikely so we should have a pump in stress
     # On the other hand, the effeect should be negative for stress to increase? E.g. wind changing benefits the pilot so should not stress?
 
-    return value_stress, attribute_stress, pred_ctrl_stress, ctrl_stress, pred_stress
+    stress_data_dict = {
+        'heuristic_stress': attribute_stress, 
+        'pred_control_stress': pred_ctrl_stress,
+        'value_stress': value_stress,
+        'ctrl_stress': ctrl_stress,
+        'pred_stress': pred_stress}
+
+    return stress_data_dict
+
+    #eturn value_stress, attribute_stress, pred_ctrl_stress, ctrl_stress, pred_stress
 
 # How to administer 

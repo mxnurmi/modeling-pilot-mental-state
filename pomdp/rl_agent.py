@@ -94,10 +94,10 @@ class RLAgentWrapper():
         plane_location = agent_state.coordinates
 
     def compute_stress(self, stress_estimator):
-        value_stress, attribute_stress, predict_control_stress, ctrl_stress, pred_stress = stress_estimator.compute_stress(
-                    self.plane_problem.agent, num_sims=self.pomcp.last_num_sims)
-
-        return value_stress, attribute_stress, predict_control_stress, ctrl_stress, pred_stress
+        stress_dict = stress_estimator.compute_stress(
+                    agent=self.plane_problem.agent, num_sims=self.pomcp.last_num_sims)
+        return stress_dict
+        #return value_stress, attribute_stress, predict_control_stress, ctrl_stress, pred_stress
 
     def return_policy(self):
         return self.plane_problem.agent.policy_model
