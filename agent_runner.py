@@ -212,6 +212,7 @@ def runner_data_gather(rl_agent, scenario_name, debug_plane_problem, debug_plann
             predict_control_stress_data.append(predict_control_stress)
             pred_stress_data.append(pred_stress)
             ctrl_stress_data.append(ctrl_stress)
+            # TODO: we should return one dict/pd.df for stress data and one for stress. Then combine them here.
             state_data.append(rl_agent.return_plane_position()) # NOTE: Make sure you call it here as it is updated right above!
             frame_data.append(step)
 

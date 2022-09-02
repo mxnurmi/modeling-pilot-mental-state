@@ -40,7 +40,8 @@ class PlaneProblemEnvironment(pomdp_py.Environment):
         """
         #assert robot_id is not None, "state transition should happen for a specific robot"
         if override_state == None:
-            next_state = copy.deepcopy(self.state)
+            # TODO: Build functionality for alternative behaviour where we use the overriding_state instead
+            #next_state = copy.deepcopy(self.state)
             next_state = self.transition_model.sample(self.state, action)
             reward = self.reward_model.sample(self.state, action, next_state)
         if execute:
